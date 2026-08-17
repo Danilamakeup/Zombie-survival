@@ -107,6 +107,7 @@ function createPlayer(socketId, name, room) {
     deaths: 0,
     weapon: 'rifle',
     alive: true,
+    r: 14,
     invuln: 1.5,
     lastShot: 0,
     color: room.mode === 'team' ? (team === 0 ? '#3a8fd4' : '#e74c3c') : randomColor(socketId)
@@ -152,6 +153,13 @@ function roomSnapshot(room) {
     scores: room.scores
   };
 }
+
+
+// ---------- Shared map collision ----------
+const MAP_W = 1000, MAP_H = 640;
+const MAP_OBSTACLES = [[.12,.18,70,42],[.72,.12,50,70],[.08,.58,80,34],[.78,.52,48,58],[.38,.32,90,26],[.58,.68,36,50],[.22,.42,30,80],[.88,.28,44,40],[.32,.08,65,30],[.62,.48,58,32],[.45,.18,40,52],[.18,.72,55,30],[.82,.68,40,44],[.1,.32,34,50],[.68,.38,50,28],[.5,.78,75,24]].map(([px,py,w,h])=>({x:MAP_W*px,y:MAP_H*py,w,h}));
+function collidesMap(x,y,r){for(const o of MAP_OBSTACLES){const cx=Math.max(o.x,Math.min(x,o.x+o.w)),cy=Math.max(o.y,Math.min(y,o.y+o.h));if(Math.hypot(x-cx,y-cy)<r)return true}return false}
+function movePlayer(p,dx,dy){const speed=3.4*(p._sprint?1.55:1);const len=Math.hypot(dx,dy)||1;dx=dx/len*speed;dy=dy/len*speed;let nx=Math.max(p.r,Math.min(MAP_W-p.r,p.x+dx)),ny=Math.max(p.r,Math.min(MAP_H-p.r,p.y+dy));if(!collidesMap(nx,p.y,p.r))p.x=nx;if(!collidesMap(p.x,ny,p.r))p.y=ny}
 
 // ---------- Socket ----------
 io.on('connection', (socket) => {
@@ -200,20 +208,14 @@ io.on('connection', (socket) => {
     const p = room.players.get(socket.id);
     if (!p || !p.alive) return;
 
-    // clamp movement
-    const speed = 3.4 * (data.sprint ? 1.55 : 1);
+    // Server-authoritative movement with the same collision map as the client.
     let dx = 0, dy = 0;
     if (data.up) dy -= 1;
     if (data.down) dy += 1;
     if (data.left) dx -= 1;
     if (data.right) dx += 1;
-    if (dx || dy) {
-      const len = Math.hypot(dx, dy) || 1;
-      dx = (dx / len) * speed;
-      dy = (dy / len) * speed;
-      p.x = Math.max(20, Math.min(980, p.x + dx));
-      p.y = Math.max(20, Math.min(620, p.y + dy));
-    }
+    p._sprint = !!data.sprint;
+    if (dx || dy) movePlayer(p, dx, dy);
     if (typeof data.angle === 'number') p.angle = data.angle;
     if (data.weapon) p.weapon = data.weapon;
   });
@@ -228,13 +230,15 @@ io.on('connection', (socket) => {
     if (now - p.lastShot < 100) return; // rate limit
     p.lastShot = now;
     const angle = typeof data.angle === 'number' ? data.angle : p.angle;
+    const safeDmg = Math.max(8, Math.min(45, Number(data.dmg) || 18));
+    const safeSpeed = Math.max(10, Math.min(18, Number(data.speed) || 14));
     room.bullets.push({
-      id: `${socket.id}-${now}`,
+      id: `${socket.id}-${now}-${Math.random().toString(36).slice(2)}`,
       x: p.x + Math.cos(angle) * 18,
       y: p.y + Math.sin(angle) * 18,
       angle,
-      speed: 14,
-      dmg: 18,
+      speed: safeSpeed,
+      dmg: safeDmg,
       life: 0.9,
       ownerId: p.id,
       ownerTeam: p.team,
@@ -290,7 +294,7 @@ setInterval(() => {
       b.x += Math.cos(b.angle) * b.speed;
       b.y += Math.sin(b.angle) * b.speed;
       b.life -= dt;
-      if (b.life <= 0 || b.x < -20 || b.x > 1020 || b.y < -20 || b.y > 660) {
+      if (b.life <= 0 || b.x < -20 || b.x > MAP_W+20 || b.y < -20 || b.y > MAP_H+20 || collidesMap(b.x,b.y,2)) {
         room.bullets.splice(i, 1);
         continue;
       }
@@ -299,7 +303,7 @@ setInterval(() => {
         if (room.mode === 'team' && p.team === b.ownerTeam) continue;
         if (p.invuln > 0) continue;
         const d = Math.hypot(p.x - b.x, p.y - b.y);
-        if (d < 16) {
+        if (d < (p.r + 3)) {
           p.hp -= b.dmg;
           room.bullets.splice(i, 1);
           if (p.hp <= 0) {
