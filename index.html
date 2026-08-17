@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Topdown Zombie Survival</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Roboto:wght@400;500;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0a;color:#fff;font-family:'Roboto',sans-serif;overflow:hidden;height:100vh}
+.bg{position:fixed;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(120,0,0,.35),transparent 50%),radial-gradient(ellipse at 80% 20%,rgba(80,0,0,.25),transparent 40%),linear-gradient(180deg,#1a0505,#0a0a0a 60%,#050505);z-index:0}
+.noise{position:fixed;inset:0;opacity:.04;pointer-events:none;z-index:1;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.header{position:relative;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:16px 36px;background:linear-gradient(180deg,rgba(0,0,0,.75),transparent)}
+.logo{font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;letter-spacing:3px;text-transform:uppercase}
+.logo span{color:#c41e1e}
+.nav{display:flex;gap:24px;align-items:center;font-family:'Oswald',sans-serif;font-size:14px;letter-spacing:1.5px;text-transform:uppercase}
+.nav a{color:#888;text-decoration:none;cursor:pointer}.nav a:hover,.nav a.active{color:#fff}
+.profile-btn{padding:6px 14px;border:1px solid rgba(255,255,255,.15);border-radius:4px;font-size:12px;color:#ccc;cursor:pointer}
+.profile-btn:hover{border-color:#c41e1e;color:#fff}
+.profile-btn.logged{border-color:rgba(46,204,113,.4);color:#2ecc71}
+.main{position:relative;z-index:5;display:flex;height:calc(100vh - 64px);padding:14px 32px 28px;gap:28px}
+.left{width:280px;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:20px}
+.game-title{font-family:'Oswald',sans-serif;font-size:40px;font-weight:700;line-height:1.05;text-transform:uppercase;margin-bottom:8px;text-shadow:0 0 28px rgba(196,30,30,.5)}
+.game-title .red{color:#c41e1e}
+.subtitle{font-size:12px;color:#999;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px}
+.desc{font-size:13px;line-height:1.5;color:#aaa}
+.cards{flex:1;display:flex;gap:14px;align-items:center;overflow-x:auto}
+.card{position:relative;width:230px;height:380px;border-radius:8px;overflow:hidden;cursor:pointer;transition:transform .25s,box-shadow .25s;background:#111;border:1px solid rgba(255,255,255,.08);flex-shrink:0}
+.card:hover{transform:translateY(-8px) scale(1.03);box-shadow:0 18px 40px rgba(0,0,0,.6),0 0 0 2px rgba(196,30,30,.4)}
+.card-bg{position:absolute;inset:0}
+.card-art{position:absolute;inset:0;opacity:.4;pointer-events:none}
+.card-overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.1),rgba(0,0,0,.55) 50%,rgba(0,0,0,.94))}
+.card-content{position:absolute;bottom:0;left:0;right:0;padding:20px 16px;z-index:2}
+.card-icon{width:42px;height:42px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;background:rgba(196,30,30,.22);border:1px solid rgba(196,30,30,.45);border-radius:6px;font-size:20px}
+.card-title{font-family:'Oswald',sans-serif;font-size:20px;font-weight:600;letter-spacing:1px;text-transform:uppercase;margin-bottom:5px}
+.card-tags{display:flex;gap:5px;margin-bottom:6px;flex-wrap:wrap}
+.tag{font-size:10px;letter-spacing:.4px;text-transform:uppercase;color:#aaa;background:rgba(255,255,255,.08);padding:2px 7px;border-radius:3px}
+.card-desc{font-size:12px;color:#999;line-height:1.35}
+.card.play .card-bg{background:linear-gradient(145deg,#1a0808,#0d1a0d)}
+.card.multi .card-bg{background:linear-gradient(145deg,#0a1220,#0d1a2a)}
+.card.leaders .card-bg{background:linear-gradient(145deg,#1a1008,#15100a)}
+.card.settings .card-bg{background:linear-gradient(145deg,#0a0a1a,#12121f)}
+.card.howto .card-bg{background:linear-gradient(145deg,#121008,#0f0e0a)}
+.card-art.play-art{background:radial-gradient(circle at 70% 30%,rgba(196,30,30,.45),transparent 55%)}
+.card-art.multi-art{background:radial-gradient(circle at 60% 40%,rgba(50,120,220,.4),transparent 55%)}
+.card-art.leaders-art{background:radial-gradient(circle at 50% 30%,rgba(241,196,15,.3),transparent 50%)}
+.card-art.settings-art{background:radial-gradient(circle at 40% 50%,rgba(150,150,200,.25),transparent 50%)}
+.card-art.howto-art{background:radial-gradient(circle at 60% 40%,rgba(100,180,100,.25),transparent 50%)}
+
+.detail{position:fixed;top:0;right:-540px;width:520px;height:100%;background:#0e0e10;border-left:1px solid rgba(255,255,255,.08);z-index:100;transition:right .35s;display:flex;flex-direction:column;box-shadow:-20px 0 50px rgba(0,0,0,.7)}
+.detail.open{right:0}
+.detail-header{padding:22px 26px 14px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;justify-content:space-between;align-items:center}
+.detail-title{font-family:'Oswald',sans-serif;font-size:22px;font-weight:600;letter-spacing:1px;text-transform:uppercase}
+.close-btn{width:34px;height:34px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#ccc;font-size:18px;cursor:pointer;border-radius:5px}
+.close-btn:hover{background:rgba(196,30,30,.3);border-color:#c41e1e;color:#fff}
+.detail-body{flex:1;overflow-y:auto;padding:22px 26px}
+.section{margin-bottom:20px}
+.section h3{font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:#c41e1e;margin-bottom:10px}
+.section p,.section li{font-size:13px;line-height:1.5;color:#bbb}
+.section ul{padding-left:16px}
+.setting-group{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:12px;margin-bottom:10px}
+.slider-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.slider-label{min-width:110px;font-size:12px;color:#bbb}
+.slider-value{min-width:36px;text-align:right;font-size:12px;color:#ddd}
+input[type=range]{-webkit-appearance:none;flex:1;height:5px;background:rgba(255,255,255,.12);border-radius:3px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#c41e1e;border-radius:50%;border:2px solid #fff}
+.gfx-option{display:flex;align-items:center;gap:10px;padding:9px;margin-bottom:4px;border-radius:5px;cursor:pointer;border:1px solid transparent}
+.gfx-option:hover{background:rgba(255,255,255,.04)}
+.gfx-option.active{background:rgba(196,30,30,.15);border-color:rgba(196,30,30,.4)}
+.gfx-option input{display:none}
+.gfx-radio{width:14px;height:14px;border:2px solid #666;border-radius:50%;position:relative}
+.gfx-option.active .gfx-radio{border-color:#c41e1e}
+.gfx-option.active .gfx-radio::after{content:'';position:absolute;top:2px;left:2px;width:6px;height:6px;background:#c41e1e;border-radius:50%}
+.gfx-name{font-weight:500;min-width:75px;color:#ddd;font-size:13px}
+.gfx-desc{font-size:11px;color:#888}
+.btn-play{display:inline-block;margin-top:6px;padding:12px 28px;background:linear-gradient(135deg,#c41e1e,#8a1212);color:#fff;font-family:'Oswald',sans-serif;font-size:15px;letter-spacing:2px;text-transform:uppercase;border:none;border-radius:4px;cursor:pointer}
+.btn-play:hover{background:linear-gradient(135deg,#e02a2a,#a01515);box-shadow:0 0 18px rgba(196,30,30,.45)}
+.btn-secondary{display:inline-block;margin-top:8px;padding:10px 20px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:#ccc;font-size:13px;border-radius:4px;cursor:pointer}
+.btn-secondary:hover{background:rgba(255,255,255,.1);color:#fff}
+.save-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(70px);background:rgba(20,20,20,.95);border:1px solid rgba(196,30,30,.5);padding:10px 22px;border-radius:6px;font-size:13px;z-index:200;opacity:0;transition:all .3s;pointer-events:none}
+.save-toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:90;opacity:0;pointer-events:none;transition:opacity .3s}
+.overlay.show{opacity:1;pointer-events:auto}
+.vol-hint{position:fixed;bottom:16px;right:16px;z-index:15;font-size:12px;color:#666}
+
+.auth-form{display:flex;flex-direction:column;gap:10px}
+.auth-form input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:10px 14px;color:#fff;font-size:14px;outline:none}
+.auth-form input:focus{border-color:rgba(196,30,30,.5)}
+.auth-form label{font-size:12px;color:#888;margin-bottom:-4px}
+.auth-error{color:#e74c3c;font-size:12px;min-height:16px}
+.auth-switch{font-size:12px;color:#888;margin-top:6px}
+.auth-switch span{color:#c41e1e;cursor:pointer}
+
+.server-list{display:flex;flex-direction:column;gap:7px}
+.server-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:11px 13px;cursor:pointer;transition:.15s;display:flex;justify-content:space-between;align-items:center}
+.server-card:hover{background:rgba(196,30,30,.12);border-color:rgba(196,30,30,.35)}
+.server-card .sname{font-weight:600;font-size:13px;color:#eee}
+.server-card .smeta{font-size:11px;color:#888;margin-top:2px}
+.server-card .splayers{font-family:'Oswald',sans-serif;font-size:15px;color:#2ecc71}
+.mode-pills{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.mode-pill{padding:7px 12px;border-radius:20px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);font-size:11px;cursor:pointer}
+.mode-pill:hover,.mode-pill.active{background:rgba(196,30,30,.2);border-color:rgba(196,30,30,.5);color:#fff}
+.lock-msg{background:rgba(196,30,30,.1);border:1px solid rgba(196,30,30,.3);border-radius:6px;padding:12px;font-size:13px;color:#e8a0a0;margin-bottom:12px}
+
+.tops-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tops-tab{padding:7px 12px;border-radius:4px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);font-size:11px;cursor:pointer}
+.tops-tab.active,.tops-tab:hover{background:rgba(196,30,30,.18);border-color:rgba(196,30,30,.4)}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.stat-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:12px;text-align:center}
+.stat-card .num{font-family:'Oswald',sans-serif;font-size:20px;font-weight:600}
+.stat-card .lbl{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#888;margin-top:2px}
+.top-row{display:flex;justify-content:space-between;align-items:center;padding:9px 11px;background:rgba(255,255,255,.03);border-radius:5px;margin-bottom:5px;border:1px solid rgba(255,255,255,.05)}
+.top-row .rank{font-family:'Oswald',sans-serif;font-size:14px;color:#c41e1e;min-width:26px}
+.top-row .name{flex:1;font-size:13px;color:#ddd}
+.top-row .val{font-size:12px;color:#f1c40f}
+.top-category{margin-bottom:16px}
+.top-category h4{font-size:12px;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.ach-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ach{background:rgba(18,18,20,.95);border-radius:8px;padding:12px;position:relative;border:2px solid #2a2a2a}
+.ach.done{border:2px solid transparent;background:linear-gradient(#141416,#141416) padding-box,linear-gradient(90deg,#ff006e,#8338ec,#3a86ff,#06d6a0,#ffbe0b,#ff006e) border-box;animation:rgbSpin 3s linear infinite}
+@keyframes rgbSpin{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}
+.ach-icon{font-size:20px;margin-bottom:4px}
+.ach-title{font-family:'Oswald',sans-serif;font-size:13px;margin-bottom:3px;color:#888}
+.ach.done .ach-title{color:#fff}
+.ach-desc{font-size:11px;color:#666;line-height:1.3}
+.ach.done .ach-desc{color:#bbb}
+.ach-how{font-size:10px;color:#444;margin-top:3px;font-style:italic}
+.ach.done .ach-how{color:#2ecc71}
+
+/* Keybinds */
+.bind-row{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:5px;margin-bottom:5px;border:1px solid rgba(255,255,255,.05)}
+.bind-label{font-size:13px;color:#ccc}
+.bind-key{min-width:90px;text-align:center;padding:5px 10px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.15);border-radius:4px;font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;color:#eee}
+.bind-key:hover{border-color:#c41e1e}
+.bind-key.listening{border-color:#f1c40f;color:#f1c40f;animation:pulse 0.8s infinite}
+@keyframes pulse{50%{opacity:.5}}
+
+/* GAME HUD */
+#gameScreen{position:fixed;inset:0;z-index:50;display:none;background:#0a0a0a}
+#gameScreen.active{display:block}
+#gameCanvas{display:block;width:100%;height:100%;cursor:crosshair}
+#hud{position:absolute;inset:0;pointer-events:none;z-index:10;font-family:'Roboto',sans-serif}
+.minimap{position:absolute;top:12px;left:12px;width:120px;height:120px;background:rgba(0,0,0,.7);border:2px solid rgba(255,255,255,.12);border-radius:4px;overflow:hidden}
+.minimap canvas{width:100%;height:100%}
+.cod-top{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:16px;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.08);padding:6px 18px;border-radius:2px}
+.cod-top .sep{width:1px;height:24px;background:rgba(255,255,255,.12)}
+.cod-top .item{text-align:center}
+.cod-top .lbl{font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:#777}
+.cod-top .val{font-family:'Oswald',sans-serif;font-size:18px;font-weight:600;color:#fff}
+.cod-top .val.wave{color:#2ecc71}
+.cod-top .val.lvl{color:#c41e1e}
+.cod-top .val.timer{color:#f1c40f}
+.boss-bar-wrap{position:absolute;top:58px;left:50%;transform:translateX(-50%);width:min(360px,46vw);display:none;flex-direction:column;align-items:center;gap:3px}
+.boss-bar-wrap.show{display:flex}
+.boss-bar-label{font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:#c41e1e}
+.boss-bar-bg{width:100%;height:10px;background:rgba(0,0,0,.7);border:1px solid rgba(196,30,30,.45);overflow:hidden}
+.boss-bar-fill{height:100%;background:linear-gradient(90deg,#8a1212,#e74c3c);transition:width .1s}
+.cod-health{position:absolute;bottom:18px;left:18px;display:flex;align-items:center;gap:8px}
+.health-num{font-family:'Oswald',sans-serif;font-size:24px;font-weight:700;color:#e74c3c;min-width:44px}
+.health-bar-wrap{width:150px}
+.health-label{font-size:9px;letter-spacing:1px;color:#888;margin-bottom:2px;text-transform:uppercase}
+.health-bar-bg{height:11px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.12);overflow:hidden}
+.health-bar-fill{height:100%;background:linear-gradient(90deg,#8b1a1a,#e74c3c);transition:width .12s}
+.stamina-bar-bg{height:4px;background:rgba(0,0,0,.45);margin-top:3px;overflow:hidden}
+.stamina-bar-fill{height:100%;background:#2ecc71;transition:width .1s}
+.cod-weapon{position:absolute;bottom:18px;right:18px;text-align:right}
+.weapon-name{font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:1px;color:#bbb;text-transform:uppercase;margin-bottom:1px}
+.ammo-row{display:flex;align-items:baseline;justify-content:flex-end;gap:4px}
+.ammo-mag{font-family:'Oswald',sans-serif;font-size:36px;font-weight:700;color:#fff;line-height:1}
+.ammo-reserve{font-size:15px;color:#777}
+.grenade-info{font-size:12px;color:#f1c40f;margin-top:2px}
+.hud-center{position:absolute;top:32%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none}
+.wave-announce{font-family:'Oswald',sans-serif;font-size:40px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#c41e1e;text-shadow:0 0 32px rgba(196,30,30,.7);opacity:0;transition:opacity .3s}
+.wave-announce.show{opacity:1}
+.break-timer{font-size:16px;color:#ddd;margin-top:5px;opacity:0;transition:opacity .3s}
+.break-timer.show{opacity:1}
+.skip-break-btn{position:absolute;bottom:100px;left:50%;transform:translateX(-50%);padding:11px 28px;font-family:'Oswald',sans-serif;font-size:15px;letter-spacing:2px;text-transform:uppercase;border:none;border-radius:3px;cursor:pointer;background:linear-gradient(135deg,#c41e1e,#8a1212);color:#fff;z-index:15;pointer-events:auto;display:none}
+.skip-break-btn.show{display:block}
+.shop-hint{position:absolute;bottom:145px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);border:1px solid rgba(241,196,15,.35);padding:7px 14px;border-radius:3px;font-size:12px;color:#f1c40f;opacity:0;transition:opacity .3s}
+.shop-hint.show{opacity:1}
+.shop-panel{position:absolute;bottom:165px;left:50%;transform:translateX(-50%);background:rgba(10,10,12,.96);border:1px solid rgba(241,196,15,.35);border-radius:6px;padding:16px 20px;z-index:16;pointer-events:auto;display:none;min-width:340px}
+.shop-panel.show{display:block}
+.shop-panel h4{font-family:'Oswald',sans-serif;font-size:15px;letter-spacing:2px;color:#f1c40f;margin-bottom:10px;text-align:center}
+.shop-items{display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
+.shop-item{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:9px 12px;cursor:pointer;text-align:center;min-width:95px}
+.shop-item:hover{background:rgba(241,196,15,.12);border-color:rgba(241,196,15,.4)}
+.shop-item .iname{font-size:12px;color:#eee}
+.shop-item .icost{font-size:11px;color:#f1c40f}
+.shop-item.disabled{opacity:.4;pointer-events:none}
+.shop-close{display:block;margin:8px auto 0;padding:6px 14px;font-size:11px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#aaa;border-radius:3px;cursor:pointer}
+.perk-bar{position:absolute;bottom:80px;left:18px;display:flex;gap:5px}
+.perk-icon{width:32px;height:32px;border-radius:3px;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:14px}
+.scoreboard{position:absolute;top:12px;right:12px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:7px 11px;min-width:110px;font-size:11px}
+.scoreboard .stitle{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1px;color:#888;margin-bottom:3px;text-transform:uppercase}
+.scoreboard .srow{display:flex;justify-content:space-between;padding:2px 0;color:#ddd}
+.controls-hint{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.06);padding:5px 12px;border-radius:3px;font-size:10px;color:#777}
+.game-overlay{position:absolute;inset:0;background:rgba(0,0,0,.88);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:20;pointer-events:auto}
+.game-overlay.show{display:flex}
+.game-overlay h1{font-family:'Oswald',sans-serif;font-size:44px;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px}
+.game-overlay.paused h1{color:#f1c40f}
+.game-overlay.gameover h1{color:#c41e1e}
+.game-overlay p{font-size:15px;color:#aaa;margin-bottom:20px}
+.game-btn{padding:11px 24px;font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:2px;text-transform:uppercase;border:none;border-radius:3px;cursor:pointer;margin:0 4px}
+.game-btn.resume{background:linear-gradient(135deg,#c41e1e,#8a1212);color:#fff}
+.game-btn.menu{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.2)}
+#menuRoot.hidden{display:none}
+</style>
+</head>
+<body>
+<div id="menuRoot">
+  <div class="bg"></div><div class="noise"></div>
+  <header class="header">
+    <div class="logo">TOPDOWN <span>ZOMBIE</span> SURVIVAL</div>
+    <nav class="nav">
+      <a class="active">Меню</a>
+      <div class="profile-btn" id="profileBtn" onclick="openDetail('profile')">Профиль</div>
+    </nav>
+  </header>
+  <div class="main">
+    <div class="left">
+      <div class="game-title">TOPDOWN<br><span class="red">ZOMBIE</span><br>SURVIVAL</div>
+      <div class="subtitle">Выживание · Мультиплеер</div>
+      <p class="desc">Зомби — только в одиночной. Team и FFA — чистый бой с ботами.</p>
+    </div>
+    <div class="cards">
+      <div class="card play" onclick="openDetail('play')" onmouseenter="sfxHover()">
+        <div class="card-bg"></div><div class="card-art play-art"></div><div class="card-overlay"></div>
+        <div class="card-content"><div class="card-icon">▶</div><div class="card-title">Играть</div><div class="card-tags"><span class="tag">Одиночная</span></div><p class="card-desc">Волны зомби, боссы, магазин.</p></div>
+      </div>
+      <div class="card multi" onclick="openDetail('multi')" onmouseenter="sfxHover()">
+        <div class="card-bg"></div><div class="card-art multi-art"></div><div class="card-overlay"></div>
+        <div class="card-content"><div class="card-icon">⚔</div><div class="card-title">Мультиплеер</div><div class="card-tags"><span class="tag">Боты</span></div><p class="card-desc">Team / FFA / закрытый бой. Без зомби.</p></div>
+      </div>
+      <div class="card leaders" onclick="openDetail('leaders')" onmouseenter="sfxHover()">
+        <div class="card-bg"></div><div class="card-art leaders-art"></div><div class="card-overlay"></div>
+        <div class="card-content"><div class="card-icon">★</div><div class="card-title">Топы</div><div class="card-tags"><span class="tag">Лидеры</span></div><p class="card-desc">Время, киллы, уровень, боссы.</p></div>
+      </div>
+      <div class="card settings" onclick="openDetail('settings')" onmouseenter="sfxHover()">
+        <div class="card-bg"></div><div class="card-art settings-art"></div><div class="card-overlay"></div>
+        <div class="card-content"><div class="card-icon">⚙</div><div class="card-title">Настройки</div><div class="card-tags"><span class="tag">Управление</span></div><p class="card-desc">Клавиши, сенса, звук, графика.</p></div>
+      </div>
+      <div class="card howto" onclick="openDetail('howto')" onmouseenter="sfxHover()">
+        <div class="card-bg"></div><div class="card-art howto-art"></div><div class="card-overlay"></div>
+        <div class="card-content"><div class="card-icon">?</div><div class="card-title">Как играть</div><div class="card-tags"><span class="tag">Гайд</span></div><p class="card-desc">Управление и механики.</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="overlay" id="overlay" onclick="closeDetail()"></div>
+  <div class="detail" id="detail">
+    <div class="detail-header"><div class="detail-title" id="detailTitle"></div><button class="close-btn" onclick="closeDetail()">×</button></div>
+    <div class="detail-body" id="detailBody"></div>
+  </div>
+  <div class="save-toast" id="saveToast">Сохранено</div>
+  <div class="vol-hint">Кликни, чтобы включить звук</div>
+</div>
+
+<div id="gameScreen">
+  <canvas id="gameCanvas"></canvas>
+  <div id="hud">
+    <div class="minimap"><canvas id="minimapCanvas" width="120" height="120"></canvas></div>
+    <div class="cod-top">
+      <div class="item"><div class="lbl">Режим</div><div class="val lvl" id="hudMode">SOLO</div></div>
+      <div class="sep"></div>
+      <div class="item"><div class="lbl" id="hudMidLabel">Зомби</div><div class="val wave" id="hudWave">0</div></div>
+      <div class="sep"></div>
+      <div class="item"><div class="lbl">Убийства</div><div class="val" id="hudKills">0</div></div>
+      <div class="sep"></div>
+      <div class="item"><div class="lbl">Время</div><div class="val timer" id="hudTimer">--:--</div></div>
+    </div>
+    <div class="boss-bar-wrap" id="bossBarWrap"><div class="boss-bar-label">БОСС</div><div class="boss-bar-bg"><div class="boss-bar-fill" id="bossBarFill"></div></div></div>
+    <div class="hud-center"><div class="wave-announce" id="waveAnnounce"></div><div class="break-timer" id="breakTimer"></div></div>
+    <button class="skip-break-btn" id="skipBreakBtn" onclick="skipBreak()">Начать волну (Space)</button>
+    <div class="shop-hint" id="shopHint">Подойди к SHOP и нажми E</div>
+    <div class="shop-panel" id="shopPanel"><h4>МАГАЗИН ★ <span id="shopStars">0</span></h4><div class="shop-items" id="shopItems"></div><button class="shop-close" onclick="closeShopPanel()">Закрыть</button></div>
+    <div class="cod-health">
+      <div class="health-num" id="hudHealth">100</div>
+      <div class="health-bar-wrap">
+        <div class="health-label">Здоровье</div>
+        <div class="health-bar-bg"><div class="health-bar-fill" id="healthFill"></div></div>
+        <div class="stamina-bar-bg"><div class="stamina-bar-fill" id="staminaFill"></div></div>
+      </div>
+    </div>
+    <div class="cod-weapon">
+      <div class="weapon-name" id="weaponName">ВИНТОВКА</div>
+      <div class="ammo-row"><span class="ammo-mag" id="ammoMag">30</span><span class="ammo-reserve" id="ammoReserve">/ 90</span></div>
+      <div class="grenade-info" id="grenadeInfo">G × 2</div>
+    </div>
+    <div class="scoreboard" id="scoreboard" style="display:none"><div class="stitle">Счёт</div><div id="scoreRows"></div></div>
+    <div class="perk-bar" id="perkBar"></div>
+    <div class="controls-hint" id="controlsHint">WASD · Shift · Ctrl · ЛКМ · R · G · E · F · Space · 1/2/3</div>
+  </div>
+  <div class="game-overlay paused" id="pauseOverlay"><h1>Пауза</h1><p>ESC — продолжить</p><div><button class="game-btn resume" onclick="togglePause()">Продолжить</button><button class="game-btn menu" onclick="backToMenu()">В меню</button></div></div>
+  <div class="game-overlay gameover" id="gameOverOverlay"><h1 id="endTitle">Бой окончен</h1><p id="gameOverStats"></p><div><button class="game-btn resume" onclick="restartGame()">Заново</button><button class="game-btn menu" onclick="backToMenu()">В меню</button></div></div>
+</div>
+
+<script>
+/* ===== AUDIO ===== */
+let actx=null,masterG,musicG,sfxG,musicNodes=[],musicMode='none',lastGrowl=0,runT=0;
+function initAudio(){if(actx)return;try{actx=new(window.AudioContext||window.webkitAudioContext)();masterG=actx.createGain();masterG.gain.value=.7;masterG.connect(actx.destination);musicG=actx.createGain();musicG.gain.value=.25;musicG.connect(masterG);sfxG=actx.createGain();sfxG.gain.value=.5;sfxG.connect(masterG);applyVol()}catch(e){}}
+function applyVol(){if(!actx||!masterG)return;const s=settings;masterG.gain.value=(s.volumeMaster/100)*.75;musicG.gain.value=(s.volumeMusic/100)*.3;sfxG.gain.value=(s.volumeUI/100)*.55}
+function resumeAudio(){initAudio();if(actx&&actx.state==='suspended')actx.resume().then(()=>{if(musicMode==='none')startMusic('menu')});else if(musicMode==='none')startMusic('menu');document.querySelector('.vol-hint')?.remove()}
+document.addEventListener('click',resumeAudio);document.addEventListener('keydown',resumeAudio);document.addEventListener('pointerdown',resumeAudio);
+function tone(f,t,d,v=.15){if(!actx||!sfxG)return;try{const o=actx.createOscillator(),g=actx.createGain();o.type=t;o.frequency.value=f;g.gain.setValueAtTime(v,actx.currentTime);g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+d);o.connect(g);g.connect(sfxG);o.start();o.stop(actx.currentTime+d)}catch(e){}}
+function sfxHover(){resumeAudio();tone(620,'sine',.05,.06)}
+function sfxClick(){resumeAudio();tone(180,'triangle',.06,.1)}
+function sfxSelect(){resumeAudio();tone(240,'sine',.09,.09);tone(380,'sine',.12,.06)}
+function sfxClose(){resumeAudio();tone(280,'sine',.06,.06)}
+function sfxStart(){resumeAudio();tone(140,'sine',.16,.1);setTimeout(()=>tone(210,'sine',.2,.07),80)}
+function sfxShoot(){resumeAudio();tone(110,'triangle',.05,.12)}
+function sfxReload(){resumeAudio();tone(190,'sine',.08,.07);setTimeout(()=>tone(150,'sine',.09,.05),80)}
+function sfxGrenade(){resumeAudio();tone(75,'triangle',.12,.1)}
+function sfxGrowl(){if(!actx||performance.now()-lastGrowl<2000)return;lastGrowl=performance.now();tone(55+Math.random()*25,'sine',.22,.05)}
+function sfxRun(){runT++;if(runT<8)return;runT=0;tone(85+Math.random()*15,'sine',.03,.025)}
+function stopMusic(){musicNodes.forEach(n=>{try{n.stop?.()}catch(e){}});musicNodes=[];musicMode='none'}
+function startMusic(mode){if(!actx||!musicG||musicMode===mode)return;stopMusic();musicMode=mode;try{const base=mode==='menu'?52:mode==='boss'?38:44;const o1=actx.createOscillator(),g1=actx.createGain();o1.type='sine';o1.frequency.value=base;g1.gain.value=mode==='menu'?0.11:0.07;o1.connect(g1);g1.connect(musicG);o1.start();musicNodes.push(o1,g1);const o2=actx.createOscillator(),g2=actx.createGain();o2.type='sine';o2.frequency.value=base*1.5;g2.gain.value=0.04;o2.connect(g2);g2.connect(musicG);o2.start();musicNodes.push(o2,g2)}catch(e){}}
+
+/* ===== KEYBINDS ===== */
+const DEFAULT_BINDS={
+  up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD',
+  sprint:'ShiftLeft',slide:'ControlLeft',
+  reload:'KeyR',grenade:'KeyG',interact:'KeyE',help:'KeyF',
+  weapon1:'Digit1',weapon2:'Digit2',weapon3:'Digit3',nextWave:'Space'
+};
+const BIND_LABELS={
+  up:'Вперёд',down:'Назад',left:'Влево',right:'Вправо',
+  sprint:'Бег',slide:'Подкат',reload:'Перезарядка',grenade:'Граната',
+  interact:'Действие (E)',help:'Подмога',weapon1:'Оружие 1',weapon2:'Оружие 2',
+  weapon3:'Оружие 3',nextWave:'След. волна'
+};
+function codeToName(code){
+  if(!code)return '—';
+  const map={KeyW:'W',KeyA:'A',KeyS:'S',KeyD:'D',KeyR:'R',KeyG:'G',KeyE:'E',KeyF:'F',
+    ShiftLeft:'L-Shift',ShiftRight:'R-Shift',ControlLeft:'L-Ctrl',ControlRight:'R-Ctrl',
+    Space:'Space',Digit1:'1',Digit2:'2',Digit3:'3',Digit4:'4',Digit5:'5',
+    ArrowUp:'↑',ArrowDown:'↓',ArrowLeft:'←',ArrowRight:'→',Tab:'Tab',CapsLock:'Caps'};
+  return map[code]||code.replace('Key','').replace('Digit','');
+}
+
+/* ===== SETTINGS / STATS / AUTH ===== */
+const DEF={sensitivity:1.5,graphics:'normal',volumeMaster:80,volumeMusic:55,volumeUI:70,binds:{...DEFAULT_BINDS}};
+function loadSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem('tzs_settings')||'{}');
+    return {...DEF,...s,binds:{...DEFAULT_BINDS,...(s.binds||{})}};
+  }catch{return {...DEF,binds:{...DEFAULT_BINDS}}}
+}
+function saveSettings(s){localStorage.setItem('tzs_settings',JSON.stringify(s));showToast();applyVol()}
+function showToast(msg){const t=document.getElementById('saveToast');t.textContent=msg||'Сохранено';t.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>t.classList.remove('show'),1400)}
+let settings=loadSettings();
+
+const ACH=[
+  {id:'first_blood',icon:'🩸',title:'Первая кровь',desc:'Убей первого зомби',how:'1 убийство'},
+  {id:'survivor5',icon:'🛡️',title:'Выживший',desc:'5 уровень',how:'Ур. 5'},
+  {id:'boss_slayer',icon:'👑',title:'Убийца боссов',desc:'Убей босса',how:'Убей босса'},
+  {id:'centurion',icon:'💯',title:'Центурион',desc:'100 убийств',how:'100 киллов'},
+  {id:'marathon',icon:'⏱️',title:'Марафонец',desc:'20 мин',how:'20 минут'},
+  {id:'shopaholic',icon:'🛒',title:'Шопоголик',desc:'8 покупок',how:'8 покупок'},
+  {id:'grenadier',icon:'💣',title:'Гренадёр',desc:'15 гранат-киллов',how:'15 гранатами'},
+  {id:'arsenal',icon:'🔫',title:'Арсенал',desc:'Все оружия',how:'Дробовик+SMG'},
+  {id:'untouchable',icon:'✨',title:'Неприкасаемый',desc:'Волна без урона',how:'Без урона'},
+  {id:'speedrunner',icon:'⚡',title:'Спринтер',desc:'60 сек бега',how:'60 сек'}
+];
+function loadStats(){try{const r=localStorage.getItem('tzs_stats');return r?JSON.parse(r):{playTime:0,kills:0,bossKills:0,maxLevel:1,purchases:0,grenadeKills:0,weaponsUnlocked:['pistol','rifle'],sprintTime:0,achievements:{},bestKills:0,bestLevel:1,playerKills:0}}catch{return{playTime:0,kills:0,bossKills:0,maxLevel:1,purchases:0,grenadeKills:0,weaponsUnlocked:['pistol','rifle'],sprintTime:0,achievements:{},bestKills:0,bestLevel:1,playerKills:0}}}
+function saveStats(){localStorage.setItem('tzs_stats',JSON.stringify(stats))}
+let stats=loadStats();
+function unlockAch(id){if(!stats.achievements[id]){stats.achievements[id]=true;saveStats()}}
+function checkAchs(){if(stats.kills>=1)unlockAch('first_blood');if(stats.maxLevel>=5)unlockAch('survivor5');if(stats.bossKills>=1)unlockAch('boss_slayer');if(stats.kills>=100)unlockAch('centurion');if(stats.playTime>=1200)unlockAch('marathon');if(stats.purchases>=8)unlockAch('shopaholic');if(stats.grenadeKills>=15)unlockAch('grenadier');if(stats.weaponsUnlocked.includes('shotgun')&&stats.weaponsUnlocked.includes('smg'))unlockAch('arsenal');if(stats.sprintTime>=60)unlockAch('speedrunner')}
+
+function loadUser(){try{return JSON.parse(localStorage.getItem('tzs_user')||'null')}catch{return null}}
+function saveUser(u){localStorage.setItem('tzs_user',JSON.stringify(u));updateProfileBtn()}
+function loadAccounts(){try{return JSON.parse(localStorage.getItem('tzs_accounts')||'{}')}catch{return{}}}
+function saveAccounts(a){localStorage.setItem('tzs_accounts',JSON.stringify(a))}
+let currentUser=loadUser();
+function updateProfileBtn(){const btn=document.getElementById('profileBtn');if(currentUser){btn.textContent=currentUser.name;btn.classList.add('logged')}else{btn.textContent='Профиль';btn.classList.remove('logged')}}
+updateProfileBtn();
+let authMode='login',selectedMode='team',topsTab='stats',listeningBind=null;
+
+const SERVERS={
+  team:[{name:'Server-1',players:'3/8',ping:22},{name:'Server-2',players:'5/8',ping:35},{name:'Server-3',players:'1/8',ping:18},{name:'Server-4',players:'7/8',ping:41}],
+  ffa:[{name:'Server-1',players:'4/8',ping:29},{name:'Server-2',players:'6/8',ping:47},{name:'Server-3',players:'2/8',ping:15},{name:'Server-4',players:'8/8',ping:55},{name:'Server-5',players:'3/8',ping:33}],
+  closed:[{name:'Server-1',players:'1/4',ping:12},{name:'Server-2',players:'2/4',ping:20},{name:'Server-3',players:'1/4',ping:8}]
+};
+
+/* ===== MENU HTML ===== */
+function getMultiHTML(){
+  if(!currentUser)return `<div class="lock-msg">🔒 Мультиплеер только для зарегистрированных.<br>Зайди в <b>Профиль</b>.</div><button class="btn-play" onclick="openDetail('profile')">Профиль</button>`;
+  return `<div class="section"><h3>Режим</h3><div class="mode-pills">
+    <div class="mode-pill ${selectedMode==='team'?'active':''}" onclick="selectMode('team')">Командный · 5 мин</div>
+    <div class="mode-pill ${selectedMode==='ffa'?'active':''}" onclick="selectMode('ffa')">Каждый за себя · 10 мин</div>
+    <div class="mode-pill ${selectedMode==='closed'?'active':''}" onclick="selectMode('closed')">Закрытый бой (ИИ)</div>
+  </div><p style="font-size:12px;color:#888">Team и FFA — только игроки/боты, без зомби.</p></div>
+  <div class="section"><h3>Серверы</h3><div class="server-list">
+    ${SERVERS[selectedMode].map(s=>`<div class="server-card" onclick="joinServer('${selectedMode}')"><div><div class="sname">${s.name}</div><div class="smeta">${selectedMode.toUpperCase()} · ${s.ping} ms</div></div><div class="splayers">${s.players}</div></div>`).join('')}
+  </div></div>`;
+}
+function selectMode(m){selectedMode=m;document.getElementById('detailBody').innerHTML=getMultiHTML();sfxClick()}
+function joinServer(mode){if(!currentUser)return;sfxSelect();closeDetail();startGame(mode)}
+
+function getProfileHTML(){
+  if(currentUser)return `<div class="section"><h3>Аккаунт</h3><p>Вы вошли как <b style="color:#2ecc71">${currentUser.name}</b></p>
+    <button class="btn-secondary" onclick="logout()">Выйти</button></div>
+    <div class="section"><h3>Статистика</h3><div class="stat-grid">
+      <div class="stat-card"><div class="num">${(stats.playTime/3600).toFixed(1)}ч</div><div class="lbl">Время</div></div>
+      <div class="stat-card"><div class="num">${stats.kills}</div><div class="lbl">Киллы зомби</div></div>
+    </div></div>`;
+  return `<div class="section"><h3>${authMode==='login'?'Вход':'Регистрация'}</h3><div class="auth-form">
+    <label>Никнейм</label><input type="text" id="authName" maxlength="16" placeholder="Ник">
+    <label>Пароль</label><input type="password" id="authPass" maxlength="32" placeholder="Пароль">
+    <div class="auth-error" id="authError"></div>
+    <button class="btn-play" onclick="submitAuth()">${authMode==='login'?'Войти':'Создать'}</button>
+    <div class="auth-switch">${authMode==='login'?'Нет аккаунта? <span onclick="switchAuth()">Регистрация</span>':'Есть аккаунт? <span onclick="switchAuth()">Войти</span>'}</div>
+  </div></div>`;
+}
+function switchAuth(){authMode=authMode==='login'?'register':'login';document.getElementById('detailBody').innerHTML=getProfileHTML();sfxClick()}
+function submitAuth(){
+  const name=(document.getElementById('authName')?.value||'').trim();
+  const pass=(document.getElementById('authPass')?.value||'').trim();
+  const err=document.getElementById('authError');
+  if(name.length<2){err.textContent='Ник минимум 2 символа';return}
+  if(pass.length<3){err.textContent='Пароль минимум 3 символа';return}
+  const accounts=loadAccounts();
+  if(authMode==='register'){
+    if(accounts[name.toLowerCase()]){err.textContent='Ник занят';return}
+    accounts[name.toLowerCase()]={name,pass};saveAccounts(accounts);
+    currentUser={name};saveUser(currentUser);showToast('Аккаунт создан!');sfxSelect();
+    document.getElementById('detailBody').innerHTML=getProfileHTML();
+  }else{
+    const acc=accounts[name.toLowerCase()];
+    if(!acc||acc.pass!==pass){err.textContent='Неверный ник или пароль';return}
+    currentUser={name:acc.name};saveUser(currentUser);showToast('Вход выполнен');sfxSelect();
+    document.getElementById('detailBody').innerHTML=getProfileHTML();
+  }
+}
+function logout(){currentUser=null;localStorage.removeItem('tzs_user');updateProfileBtn();showToast('Вы вышли');document.getElementById('detailBody').innerHTML=getProfileHTML();sfxClick()}
+
+function getLeadersHTML(){
+  checkAchs();
+  const nick=currentUser?currentUser.name:'Гость';
+  const mins=Math.floor(stats.playTime/60);
+  let body='';
+  if(topsTab==='stats'){
+    body=`<div class="stat-grid">
+      <div class="stat-card"><div class="num">${(stats.playTime/3600).toFixed(1)}ч</div><div class="lbl">Время</div></div>
+      <div class="stat-card"><div class="num">${stats.kills}</div><div class="lbl">Зомби</div></div>
+      <div class="stat-card"><div class="num">${stats.playerKills||0}</div><div class="lbl">Игроки</div></div>
+      <div class="stat-card"><div class="num">${stats.bestLevel}</div><div class="lbl">Макс. ур.</div></div>
+      <div class="stat-card"><div class="num">${stats.bossKills}</div><div class="lbl">Боссы</div></div>
+      <div class="stat-card"><div class="num">${stats.purchases}</div><div class="lbl">Покупки</div></div>
+    </div>`;
+  } else if(topsTab==='players'){
+    body=`
+    <div class="top-category"><h4>Топ по времени</h4>
+      <div class="top-row"><span class="rank">#1</span><span class="name">${nick}</span><span class="val">${mins} мин</span></div>
+      <div class="top-row"><span class="rank">#2</span><span class="name">TimeLord</span><span class="val">${Math.max(0,mins-12)} мин</span></div>
+    </div>
+    <div class="top-category"><h4>Топ по убийствам зомби</h4>
+      <div class="top-row"><span class="rank">#1</span><span class="name">${nick}</span><span class="val">${stats.kills}</span></div>
+      <div class="top-row"><span class="rank">#2</span><span class="name">ZombieSlayer</span><span class="val">${Math.max(0,stats.kills-30)}</span></div>
+    </div>
+    <div class="top-category"><h4>Топ по убийствам игроков</h4>
+      <div class="top-row"><span class="rank">#1</span><span class="name">${nick}</span><span class="val">${stats.playerKills||0}</span></div>
+      <div class="top-row"><span class="rank">#2</span><span class="name">PvP_King</span><span class="val">${Math.max(0,(stats.playerKills||0)-5)}</span></div>
+    </div>
+    <div class="top-category"><h4>Топ по макс. уровню (зомби)</h4>
+      <div class="top-row"><span class="rank">#1</span><span class="name">${nick}</span><span class="val">Ур. ${stats.bestLevel}</span></div>
+      <div class="top-row"><span class="rank">#2</span><span class="name">WaveRider</span><span class="val">Ур. ${Math.max(1,stats.bestLevel-2)}</span></div>
+    </div>
+    <div class="top-category"><h4>Топ по убийствам боссов</h4>
+      <div class="top-row"><span class="rank">#1</span><span class="name">${nick}</span><span class="val">${stats.bossKills}</span></div>
+      <div class="top-row"><span class="rank">#2</span><span class="name">BossHunter</span><span class="val">${Math.max(0,stats.bossKills-1)}</span></div>
+    </div>
+    <div class="top-category"><h4>Топ по покупкам в магазине</h4>
+      <div class="top-row"><span class="rank">#1</span><span class="name">${nick}</span><span class="val">${stats.purchases}</span></div>
+      <div class="top-row"><span class="rank">#2</span><span class="name">Shopaholic</span><span class="val">${Math.max(0,stats.purchases-3)}</span></div>
+    </div>
+    <p style="font-size:11px;color:#666">Локальные топы. С онлайн-мультиплеером появятся глобальные.</p>`;
+  } else {
+    body=`<div class="ach-grid">${ACH.map(a=>{const d=!!stats.achievements[a.id];return`<div class="ach ${d?'done':''}"><div class="ach-icon">${a.icon}</div><div class="ach-title">${a.title}</div><div class="ach-desc">${a.desc}</div><div class="ach-how">${d?'✓ Выполнено':a.how}</div></div>`}).join('')}</div>`;
+  }
+  return `<div class="tops-tabs">
+    <div class="tops-tab ${topsTab==='stats'?'active':''}" onclick="setTopsTab('stats')">Статистика</div>
+    <div class="tops-tab ${topsTab==='players'?'active':''}" onclick="setTopsTab('players')">Топ игроки</div>
+    <div class="tops-tab ${topsTab==='achs'?'active':''}" onclick="setTopsTab('achs')">Достижения</div>
+  </div>${body}`;
+}
+function setTopsTab(t){topsTab=t;document.getElementById('detailBody').innerHTML=getLeadersHTML();sfxClick()}
+
+function getSettingsHTML(){
+  const s=settings,a=v=>s.graphics===v?'active':'',c=v=>s.graphics===v?'checked':'';
+  let bindsHtml=Object.keys(BIND_LABELS).map(k=>`
+    <div class="bind-row">
+      <span class="bind-label">${BIND_LABELS[k]}</span>
+      <span class="bind-key ${listeningBind===k?'listening':''}" onclick="startListenBind('${k}')" id="bind_${k}">${codeToName(s.binds[k])}</span>
+    </div>`).join('');
+  return `
+  <div class="section"><h3>Управление</h3>
+    <div class="setting-group">
+      <div class="slider-row"><span class="slider-label">Чувств. мыши</span>
+        <input type="range" min="0.3" max="3" step="0.1" value="${s.sensitivity}" oninput="updSens(this.value,this)">
+        <span class="slider-value">${Number(s.sensitivity).toFixed(1)}</span>
+      </div>
+    </div>
+    <div class="setting-group">${bindsHtml}</div>
+    <button class="btn-secondary" onclick="resetBinds()">Сбросить клавиши</button>
+    <p style="font-size:11px;color:#666;margin-top:8px">Кликни на клавишу → нажми новую. Сохраняется автоматически.</p>
+  </div>
+  <div class="section"><h3>Графика</h3><div class="setting-group" style="padding:6px">
+    <label class="gfx-option ${a('potato')}" onclick="selGfx(this,'potato')"><input type="radio" name="gfx" ${c('potato')}><span class="gfx-radio"></span><span class="gfx-name">Картошка</span><span class="gfx-desc">FPS</span></label>
+    <label class="gfx-option ${a('normal')}" onclick="selGfx(this,'normal')"><input type="radio" name="gfx" ${c('normal')}><span class="gfx-radio"></span><span class="gfx-name">Обычная</span><span class="gfx-desc">Баланс</span></label>
+    <label class="gfx-option ${a('high')}" onclick="selGfx(this,'high')"><input type="radio" name="gfx" ${c('high')}><span class="gfx-radio"></span><span class="gfx-name">Высокая</span><span class="gfx-desc">Красота</span></label>
+  </div></div>
+  <div class="section"><h3>Звук</h3><div class="setting-group">
+    ${[['volumeMaster','Общая'],['volumeMusic','Музыка'],['volumeUI','Эффекты']].map(([k,l])=>`<div class="slider-row"><span class="slider-label">${l}</span><input type="range" min="0" max="100" value="${s[k]}" oninput="updSet('${k}',this.value,this)"><span class="slider-value">${s[k]}%</span></div>`).join('')}
+  </div></div>`;
+}
+function updSet(k,v,el){v=parseInt(v);el.nextElementSibling.textContent=v+'%';settings[k]=v;saveSettings(settings);sfxClick()}
+function updSens(v,el){v=parseFloat(v);el.nextElementSibling.textContent=v.toFixed(1);settings.sensitivity=v;saveSettings(settings)}
+function selGfx(el,v){document.querySelectorAll('.gfx-option').forEach(o=>o.classList.remove('active'));el.classList.add('active');el.querySelector('input').checked=true;settings.graphics=v;saveSettings(settings);sfxClick()}
+function startListenBind(action){
+  listeningBind=action;
+  document.getElementById('detailBody').innerHTML=getSettingsHTML();
+  sfxClick();
+}
+function resetBinds(){
+  settings.binds={...DEFAULT_BINDS};
+  saveSettings(settings);
+  showToast('Клавиши сброшены');
+  document.getElementById('detailBody').innerHTML=getSettingsHTML();
+  sfxSelect();
+}
+// Global key listener for rebinding
+document.addEventListener('keydown',e=>{
+  if(!listeningBind)return;
+  e.preventDefault();e.stopPropagation();
+  if(e.code==='Escape'){listeningBind=null;document.getElementById('detailBody').innerHTML=getSettingsHTML();return}
+  // prevent binding mouse-only nonsense
+  settings.binds[listeningBind]=e.code;
+  listeningBind=null;
+  saveSettings(settings);
+  showToast('Клавиша назначена');
+  document.getElementById('detailBody').innerHTML=getSettingsHTML();
+  sfxSelect();
+},true);
+
+const content={
+  play:{title:'Играть',html:`<div class="section"><h3>Одиночная игра</h3><p>Волны зомби. Без регистрации.</p></div><button class="btn-play" onclick="startGame('solo')">Начать игру</button>`},
+  howto:{title:'Как играть',html:`<div class="section"><h3>Режимы</h3><ul><li><b>Одиночная / Закрытый</b> — зомби, волны, боссы</li><li><b>Командный / FFA</b> — только боты, без зомби</li></ul></div>
+    <div class="section"><h3>Управление</h3><p>Настраивается в «Настройки → Управление».</p>
+    <ul><li>WASD — движение</li><li>Shift — бег</li><li>Ctrl — подкат</li><li>ЛКМ — огонь</li><li>R / G / E / F — перезарядка / граната / действие / подмога</li></ul></div>`}
+};
+
+function openDetail(t){
+  resumeAudio();sfxSelect();
+  const titles={play:'Играть',multi:'Мультиплеер',leaders:'Топы',settings:'Настройки',howto:'Как играть',profile:'Профиль'};
+  document.getElementById('detailTitle').textContent=titles[t]||t;
+  listeningBind=null;
+  let html='';
+  if(t==='settings'){settings=loadSettings();html=getSettingsHTML()}
+  else if(t==='leaders')html=getLeadersHTML();
+  else if(t==='multi')html=getMultiHTML();
+  else if(t==='profile')html=getProfileHTML();
+  else html=content[t]?.html||'';
+  document.getElementById('detailBody').innerHTML=html;
+  document.getElementById('detail').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+function closeDetail(){listeningBind=null;sfxClose();document.getElementById('detail').classList.remove('open');document.getElementById('overlay').classList.remove('show')}
+
+/* ===== GAME ===== */
+const canvas=document.getElementById('gameCanvas'),ctx=canvas.getContext('2d');
+const mmCanvas=document.getElementById('minimapCanvas'),mmCtx=mmCanvas.getContext('2d');
+let W,H;function resize(){W=canvas.width=innerWidth;H=canvas.height=innerHeight}addEventListener('resize',resize);resize();
+
+let running=false,paused=false,dead=false,gameMode='solo';
+let keys={},mouse={x:0,y:0,down:false};
+let player,zombies,bots,bullets,pickups,particles,obstacles,grenades,traps,allies;
+let level,kills,waveState,breakLeft,lastT,sessionTime=0,matchTime=0,matchDuration=0;
+let shootCd=0,reloadT=0,grenadeCd=0,slideCd=0,helpCd=0;
+let currentWeapon='rifle',activePerks=[],pendingSpawns=0,breakStarted=false;
+let waveStartHp=100,noDamageWave=true,shopPos={x:0,y:0},shopOffers=[],shopOpen=false;
+
+const WEAPONS={
+  pistol:{name:'ПИСТОЛЕТ',dmg:16,rate:260,mag:12,reload:800,spread:.035,color:'#c0a020',len:22},
+  rifle:{name:'ВИНТОВКА',dmg:25,rate:125,mag:30,reload:1250,spread:.018,color:'#6a3a2a',len:32},
+  shotgun:{name:'ДРОБОВИК',dmg:11,rate:460,mag:6,reload:1450,spread:.14,color:'#4a4a4a',len:26,pellets:5},
+  smg:{name:'SMG',dmg:10,rate:60,mag:40,reload:1050,spread:.045,color:'#3a3a4a',len:24}
+};
+
+function isDown(action){const code=settings.binds[action];return code&&keys[code]}
+
+addEventListener('keydown',e=>{
+  keys[e.code]=true;
+  if(listeningBind)return;
+  if(!running)return;
+  if(e.code==='Escape'){if(shopOpen)closeShopPanel();else togglePause();return}
+  if(e.code===settings.binds.weapon1)switchW('pistol');
+  if(e.code===settings.binds.weapon2){if(player.owned.includes('smg'))switchW('smg');else switchW('rifle')}
+  if(e.code===settings.binds.weapon3&&player.owned.includes('shotgun'))switchW('shotgun');
+  if(e.code===settings.binds.reload)startReload();
+  if(e.code===settings.binds.interact)interact();
+  if(e.code===settings.binds.grenade)throwGrenade();
+  if(e.code===settings.binds.help)callHelp();
+  if(e.code===settings.binds.slide)trySlide();
+  if(e.code===settings.binds.nextWave&&waveState==='break'){e.preventDefault();skipBreak()}
+});
+addEventListener('keyup',e=>keys[e.code]=false);
+canvas.addEventListener('mousemove',e=>{
+  // sensitivity affects how much we track - for topdown we still use absolute mouse for aim
+  mouse.x=e.clientX;mouse.y=e.clientY;
+});
+canvas.addEventListener('mousedown',e=>{if(e.button===0){mouse.down=true;resumeAudio()}});
+canvas.addEventListener('mouseup',e=>{if(e.button===0)mouse.down=false});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+function rand(a,b){return a+Math.random()*(b-a)}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function ang(a,b){return Math.atan2(b.y-a.y,b.x-a.x)}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function gfx(){return settings.graphics}
+
+function createPlayer(){return{x:W/2,y:H/2,r:14,hp:100,maxHp:100,speed:3.3,angle:0,stamina:100,mag:{pistol:12,rifle:30,shotgun:6,smg:40},reserve:{pistol:48,rifle:120,shotgun:24,smg:100},owned:['pistol','rifle'],grenades:2,helps:0,invuln:0,sliding:0,slideDir:{x:0,y:0},team:0,name:currentUser?.name||'Ты',kills:0}}
+function createBot(team,name){const side=Math.random();let x,y;if(side<.25){x=rand(80,W-80);y=rand(40,100)}else if(side<.5){x=rand(W-120,W-40);y=rand(80,H-80)}else if(side<.75){x=rand(80,W-80);y=rand(H-120,H-40)}else{x=rand(40,120);y=rand(80,H-80)}return{x,y,r:13,hp:90,maxHp:90,speed:2.5+Math.random()*.7,angle:0,mag:30,shootCd:0,reloadT:0,team,name,color:team===0?'#3a8fd4':team===1?'#e74c3c':'#9b59b6',kills:0,strafe:Math.random()>.5?1:-1}}
+function createObstacles(){const o=[],pts=[[.12,.18,70,42],[.72,.12,50,70],[.08,.58,80,34],[.78,.52,48,58],[.38,.32,90,26],[.58,.68,36,50],[.22,.42,30,80],[.88,.28,44,40],[.32,.08,65,30],[.62,.48,58,32],[.45,.18,40,52],[.18,.72,55,30],[.82,.68,40,44],[.1,.32,34,50],[.68,.38,50,28],[.5,.78,75,24]];for(const[px,py,w,h]of pts)o.push({x:W*px,y:H*py,w,h});return o}
+function hitObs(x,y,r){for(const o of obstacles){const cx=clamp(x,o.x,o.x+o.w),cy=clamp(y,o.y,o.y+o.h);if(Math.hypot(x-cx,y-cy)<r)return true}return false}
+function spawnZombie(boss=false){let x,y,t=0;do{const s=Math.floor(Math.random()*4);if(s===0){x=rand(40,W-40);y=-50}else if(s===1){x=W+50;y=rand(40,H-40)}else if(s===2){x=rand(40,W-40);y=H+50}else{x=-50;y=rand(40,H-40)}t++}while(hitObs(x,y,24)&&t<15);
+  if(boss)return{x,y,r:36,hp:480+level*80,maxHp:480+level*80,speed:1.3,dmg:18,color:'#6b0000',boss:true,type:'boss',sepX:0,sepY:0};
+  let type='normal';const r=Math.random();if(level>=4&&r>.65)type='fast';if(level>=9&&r>.85)type='tank';
+  const b={normal:{r:13,hp:34+level*7,speed:1.5+level*.05,dmg:7+level*.5,color:'#2d5a2d'},fast:{r:10,hp:20+level*4,speed:2.9+level*.06,dmg:5+level*.3,color:'#4a7a3a'},tank:{r:18,hp:110+level*14,speed:1.0+level*.025,dmg:13+level*.7,color:'#1a3a1a'}}[type];
+  return{x,y,r:b.r,hp:b.hp,maxHp:b.hp,speed:b.speed,dmg:b.dmg,color:b.color,boss:false,type,sepX:0,sepY:0,strafeDir:Math.random()>.5?1:-1};
+}
+function updateZombieAI(z,dt){z.sepX=0;z.sepY=0;for(const o of zombies){if(o===z)continue;const d=dist(z,o);if(d<z.r+o.r+16&&d>0.1){const p=(1-d/(z.r+o.r+16))*2;z.sepX+=(z.x-o.x)/d*p;z.sepY+=(z.y-o.y)/d*p}}let ta=ang(z,player);if(z.type==='fast')ta+=z.strafeDir*.4;let vx=Math.cos(ta)*z.speed+z.sepX*.85,vy=Math.sin(ta)*z.speed+z.sepY*.85;let nx=z.x+vx*60*dt,ny=z.y+vy*60*dt;if(hitObs(nx,z.y,z.r)){const s=Math.random()>.5?1:-1;vx=Math.cos(ta+s)*z.speed;nx=z.x+vx*60*dt;if(hitObs(nx,z.y,z.r))nx=z.x}if(hitObs(z.x,ny,z.r)){const s=Math.random()>.5?1:-1;vy=Math.sin(ta+s)*z.speed;ny=z.y+vy*60*dt;if(hitObs(z.x,ny,z.r))ny=z.y}if(hitObs(nx,ny,z.r)){nx=z.x;ny=z.y}z.x=nx;z.y=ny}
+function updateBotAI(b,dt){let target=null,td=900;if(gameMode==='ffa'||(gameMode==='team'&&b.team!==0)){const d=dist(b,player);if(d<td){td=d;target=player}}for(const o of bots){if(o===b)continue;if(gameMode==='team'&&o.team===b.team)continue;const d=dist(b,o);if(d<td){td=d;target=o}}if(target){b.angle=ang(b,target);const d=dist(b,target);if(d>180){let nx=b.x+Math.cos(b.angle)*b.speed*60*dt,ny=b.y+Math.sin(b.angle)*b.speed*60*dt;if(!hitObs(nx,b.y,b.r))b.x=nx;if(!hitObs(b.x,ny,b.r))b.y=ny}else if(d<70){let nx=b.x-Math.cos(b.angle)*b.speed*.7*60*dt,ny=b.y-Math.sin(b.angle)*b.speed*.7*60*dt;if(!hitObs(nx,b.y,b.r))b.x=nx;if(!hitObs(b.x,ny,b.r))b.y=ny}else{const sa=b.angle+b.strafe*1.5;let nx=b.x+Math.cos(sa)*b.speed*.55*60*dt,ny=b.y+Math.sin(sa)*b.speed*.55*60*dt;if(!hitObs(nx,b.y,b.r))b.x=nx;if(!hitObs(b.x,ny,b.r))b.y=ny}b.shootCd-=dt;if(b.shootCd<=0&&d<320&&b.mag>0){b.shootCd=.2+Math.random()*.1;b.mag--;bullets.push({x:b.x+Math.cos(b.angle)*16,y:b.y+Math.sin(b.angle)*16,angle:b.angle+(Math.random()-.5)*.08,speed:12,dmg:12,life:.9,color:b.color,owner:b});if(b.mag<=0)b.reloadT=1.2}if(b.reloadT>0){b.reloadT-=dt;if(b.reloadT<=0)b.mag=30}}b.x=clamp(b.x,20,W-20);b.y=clamp(b.y,20,H-20)}
+
+function startGame(mode='solo'){
+  resumeAudio();sfxStart();stopMusic();closeDetail();
+  document.getElementById('menuRoot').classList.add('hidden');document.getElementById('gameScreen').classList.add('active');
+  gameMode=mode;running=true;paused=false;dead=false;level=1;kills=0;currentWeapon='rifle';activePerks=[];
+  waveState=(mode==='solo'||mode==='closed')?'fighting':'combat';
+  breakLeft=0;pendingSpawns=0;breakStarted=false;
+  shootCd=0;reloadT=0;grenadeCd=0;slideCd=0;helpCd=0;sessionTime=0;matchTime=0;shopOpen=false;
+  matchDuration=mode==='team'?300:mode==='ffa'?600:0;
+  player=createPlayer();zombies=[];bots=[];bullets=[];pickups=[];particles=[];grenades=[];traps=[];allies=[];obstacles=createObstacles();shopOffers=[];
+  document.getElementById('pauseOverlay').classList.remove('show');document.getElementById('gameOverOverlay').classList.remove('show');
+  document.getElementById('shopHint').classList.remove('show');document.getElementById('breakTimer').classList.remove('show');document.getElementById('skipBreakBtn').classList.remove('show');document.getElementById('shopPanel').classList.remove('show');
+  document.getElementById('scoreboard').style.display=(mode==='team'||mode==='ffa')?'block':'none';
+  document.getElementById('hudMidLabel').textContent=(mode==='team'||mode==='ffa')?'Боты':'Зомби';
+
+  // NO ZOMBIES in team / ffa
+  if(mode==='team'){
+    for(let i=0;i<3;i++)bots.push(createBot(0,'Ally '+(i+1)));
+    for(let i=0;i<4;i++)bots.push(createBot(1,'Enemy '+(i+1)));
+    announce('КОМАНДНЫЙ БОЙ');
+  } else if(mode==='ffa'){
+    for(let i=0;i<6;i++)bots.push(createBot(2+i,'Bot '+(i+1)));
+    announce('FREE FOR ALL');
+  } else {
+    announce(mode==='closed'?'ЗАКРЫТЫЙ БОЙ':'УРОВЕНЬ 1');
+    spawnWave();
+  }
+  startMusic('combat');updateHUD();updateControlsHint();lastT=performance.now();requestAnimationFrame(loop);
+}
+
+function updateControlsHint(){
+  const b=settings.binds;
+  document.getElementById('controlsHint').textContent=
+    `${codeToName(b.up)}${codeToName(b.left)}${codeToName(b.down)}${codeToName(b.right)} · ${codeToName(b.sprint)} · ${codeToName(b.slide)} · ЛКМ · ${codeToName(b.reload)} · ${codeToName(b.grenade)} · ${codeToName(b.interact)} · ${codeToName(b.help)}`;
+}
+
+function spawnWave(){pendingSpawns=0;breakStarted=false;zombies=[];noDamageWave=true;waveStartHp=player.hp;const isBoss=level%10===0;let count=7+Math.floor(level*1.8);if(isBoss){zombies.push(spawnZombie(true));count=3+Math.floor(level/8);startMusic('boss')}else startMusic('combat');const imm=Math.min(5,count);for(let i=0;i<imm;i++)zombies.push(spawnZombie(false));pendingSpawns=count-imm;for(let i=0;i<pendingSpawns;i++)setTimeout(()=>{if(!running||waveState!=='fighting')return;zombies.push(spawnZombie(false));pendingSpawns--;updateHUD()},220+i*150);updateHUD()}
+function startBreak(){if(breakStarted||waveState==='break')return;breakStarted=true;waveState='break';breakLeft=40;spawnShop();if(noDamageWave&&player.hp>=waveStartHp)unlockAch('untouchable');document.getElementById('shopHint').classList.add('show');document.getElementById('skipBreakBtn').classList.add('show');setTimeout(()=>document.getElementById('shopHint').classList.remove('show'),4000);updateHUD()}
+function endBreak(){waveState='fighting';closeShopPanel();document.getElementById('breakTimer').classList.remove('show');document.getElementById('shopHint').classList.remove('show');document.getElementById('skipBreakBtn').classList.remove('show');level++;if(level>stats.maxLevel)stats.maxLevel=level;if(level>stats.bestLevel)stats.bestLevel=level;saveStats();checkAchs();announce(level%10===0?`БОСС — УР. ${level}`:`УРОВЕНЬ ${level}`);spawnWave()}
+function skipBreak(){if(waveState!=='break')return;sfxClick();endBreak()}
+function announce(t){const el=document.getElementById('waveAnnounce');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),1500)}
+function spawnShop(){shopPos={x:W*.5+rand(-100,100),y:H*.3+rand(-40,40)};const list=[{type:'shotgun',name:'Дробовик',cost:20},{type:'smg',name:'SMG',cost:26},{type:'grenades',name:'Гранаты ×3',cost:10},{type:'trap',name:'Ловушка ×2',cost:14},{type:'barricade',name:'Баррикада',cost:12},{type:'help',name:'Подмога',cost:18},{type:'speed',name:'Скорость',cost:9},{type:'damage',name:'Урон',cost:11},{type:'heal',name:'Полное HP',cost:7},{type:'ammo',name:'Патроны',cost:5}];shopOffers=list.sort(()=>Math.random()-.5).slice(0,5);for(let i=0;i<6;i++){let x,y,t=0;do{x=rand(60,W-60);y=rand(60,H-60);t++}while(hitObs(x,y,18)&&t<12);pickups.push({x,y,r:10,type:['ammo','health','perk_speed','perk_damage'][Math.floor(Math.random()*4)],life:20,bob:Math.random()*5})}}
+function openShopPanel(){shopOpen=true;document.getElementById('shopStars').textContent=kills;document.getElementById('shopItems').innerHTML=shopOffers.map((o,i)=>`<div class="shop-item ${kills<o.cost?'disabled':''}" onclick="buyFromPanel(${i})"><div class="iname">${o.name}</div><div class="icost">${o.cost} ★</div></div>`).join('');document.getElementById('shopPanel').classList.add('show')}
+function closeShopPanel(){shopOpen=false;document.getElementById('shopPanel').classList.remove('show')}
+function buyFromPanel(i){const o=shopOffers[i];if(!o||kills<o.cost)return;kills-=o.cost;buy(o);shopOffers.splice(i,1);updateHUD();sfxClick();if(!shopOffers.length)closeShopPanel();else openShopPanel()}
+function buy(s){stats.purchases++;if(s.type==='shotgun'){player.owned.push('shotgun');player.mag.shotgun=6;player.reserve.shotgun=18;if(!stats.weaponsUnlocked.includes('shotgun'))stats.weaponsUnlocked.push('shotgun');switchW('shotgun')}else if(s.type==='smg'){player.owned.push('smg');player.mag.smg=40;player.reserve.smg=80;if(!stats.weaponsUnlocked.includes('smg'))stats.weaponsUnlocked.push('smg');switchW('smg')}else if(s.type==='grenades')player.grenades+=3;else if(s.type==='trap'){for(let i=0;i<2;i++){const a=player.angle;traps.push({x:player.x+Math.cos(a)*50,y:player.y+Math.sin(a)*50,r:16,life:40})}}else if(s.type==='barricade'){const a=player.angle;obstacles.push({x:player.x+Math.cos(a)*55-20,y:player.y+Math.sin(a)*55-12,w:40,h:24,temp:true,life:35})}else if(s.type==='help')player.helps++;else if(s.type==='speed')addPerk('speed',12,.4);else if(s.type==='damage')addPerk('damage',12,.45);else if(s.type==='heal')player.hp=player.maxHp;else if(s.type==='ammo'){player.reserve.pistol+=20;player.reserve.rifle+=40}saveStats();checkAchs()}
+function updateHUD(){
+  document.getElementById('hudHealth').textContent=Math.max(0,Math.ceil(player.hp));
+  document.getElementById('healthFill').style.width=(player.hp/player.maxHp*100)+'%';
+  document.getElementById('staminaFill').style.width=player.stamina+'%';
+  if(gameMode==='team'||gameMode==='ffa')document.getElementById('hudWave').textContent=bots.length;
+  else document.getElementById('hudWave').textContent=waveState==='break'?'—':(zombies.length+Math.max(0,pendingSpawns));
+  document.getElementById('hudKills').textContent=kills;
+  const mn={solo:'SOLO',team:'TEAM',ffa:'FFA',closed:'CLOSED'};
+  document.getElementById('hudMode').textContent=mn[gameMode]||'SOLO';
+  if(matchDuration>0){const left=Math.max(0,matchDuration-matchTime);document.getElementById('hudTimer').textContent=`${Math.floor(left/60)}:${Math.floor(left%60).toString().padStart(2,'0')}`}
+  else document.getElementById('hudTimer').textContent=(gameMode==='solo'||gameMode==='closed')?`Ур.${level}`:'--:--';
+  const w=WEAPONS[currentWeapon];
+  document.getElementById('weaponName').textContent=w.name;
+  document.getElementById('ammoMag').textContent=player.mag[currentWeapon]||0;
+  document.getElementById('ammoReserve').textContent='/ '+(player.reserve[currentWeapon]||0);
+  document.getElementById('grenadeInfo').textContent='G × '+player.grenades;
+  const boss=zombies.find(z=>z.boss);const wrap=document.getElementById('bossBarWrap');
+  if(boss){wrap.classList.add('show');document.getElementById('bossBarFill').style.width=(boss.hp/boss.maxHp*100)+'%'}else wrap.classList.remove('show');
+  if(gameMode==='team'||gameMode==='ffa'){let rows=`<div class="srow"><span>Ты</span><span>${player.kills||kills}</span></div>`;bots.forEach(b=>{rows+=`<div class="srow"><span style="color:${b.color}">${b.name}</span><span>${b.kills}</span></div>`});document.getElementById('scoreRows').innerHTML=rows}
+}
+function switchW(w){if(reloadT>0||!player.owned.includes(w))return;currentWeapon=w;updateHUD()}
+function startReload(){const w=WEAPONS[currentWeapon];if(reloadT>0||player.mag[currentWeapon]>=w.mag||player.reserve[currentWeapon]<=0)return;reloadT=w.reload;sfxReload()}
+function interact(){if((gameMode==='solo'||gameMode==='closed')&&waveState==='break'&&dist(player,shopPos)<60){openShopPanel();return}for(let i=pickups.length-1;i>=0;i--){if(dist(player,pickups[i])<player.r+12){applyPickup(pickups[i]);pickups.splice(i,1);break}}}
+function applyPickup(p){if(p.type==='ammo'){player.reserve.pistol+=12;player.reserve.rifle+=20}else if(p.type==='health')player.hp=Math.min(100,player.hp+28);else if(p.type==='perk_speed')addPerk('speed',8,.28);else if(p.type==='perk_damage')addPerk('damage',8,.3);updateHUD()}
+function addPerk(type,dur,val){activePerks=activePerks.filter(p=>p.type!==type);activePerks.push({type,timeLeft:dur,value:val});renderPerks()}
+function renderPerks(){const ic={speed:'⚡',damage:'💥',regen:'❤️'};document.getElementById('perkBar').innerHTML=activePerks.map(p=>`<div class="perk-icon">${ic[p.type]}</div>`).join('')}
+function throwGrenade(){if(player.grenades<=0||grenadeCd>0)return;player.grenades--;grenadeCd=.7;updateHUD();sfxGrenade();const a=player.angle;grenades.push({x:player.x+Math.cos(a)*20,y:player.y+Math.sin(a)*20,vx:Math.cos(a)*8.5,vy:Math.sin(a)*8.5,life:.8,owner:player})}
+function trySlide(){if(slideCd>0||player.sliding>0||player.stamina<25)return;let dx=0,dy=0;if(isDown('up'))dy--;if(isDown('down'))dy++;if(isDown('left'))dx--;if(isDown('right'))dx++;if(!dx&&!dy){dx=Math.cos(player.angle);dy=Math.sin(player.angle)}else{const l=Math.hypot(dx,dy);dx/=l;dy/=l}player.sliding=.28;player.slideDir={x:dx,y:dy};player.stamina-=25;player.invuln=.3;slideCd=.9}
+function callHelp(){if(player.helps<=0||helpCd>0)return;player.helps--;helpCd=8;for(let i=0;i<2;i++)allies.push({x:player.x+rand(-40,40),y:player.y+rand(-40,40),r:11,hp:60,speed:2.8,dmg:14,life:16,shootCd:0});updateHUD()}
+function fire(){const w=WEAPONS[currentWeapon];if(player.mag[currentWeapon]<=0){startReload();return}player.mag[currentWeapon]--;shootCd=w.rate;updateHUD();sfxShoot();const n=w.pellets||1;for(let i=0;i<n;i++){const a=player.angle+rand(-w.spread,w.spread);bullets.push({x:player.x+Math.cos(player.angle)*16,y:player.y+Math.sin(player.angle)*16,angle:a,speed:13,dmg:w.dmg,life:1,color:w.color,owner:player})}}
+function togglePause(){if(dead||!running)return;paused=!paused;document.getElementById('pauseOverlay').classList.toggle('show',paused);if(!paused){lastT=performance.now();requestAnimationFrame(loop)}}
+function restartGame(){document.getElementById('gameOverOverlay').classList.remove('show');startGame(gameMode)}
+function backToMenu(){stats.playTime+=sessionTime;stats.kills+=kills;if(kills>stats.bestKills)stats.bestKills=kills;saveStats();checkAchs();running=false;document.getElementById('gameScreen').classList.remove('active');document.getElementById('menuRoot').classList.remove('hidden');document.getElementById('pauseOverlay').classList.remove('show');document.getElementById('gameOverOverlay').classList.remove('show');startMusic('menu')}
+function endMatch(win){dead=true;stats.playTime+=sessionTime;if(gameMode==='team'||gameMode==='ffa')stats.playerKills=(stats.playerKills||0)+kills;else stats.kills+=kills;saveStats();checkAchs();document.getElementById('endTitle').textContent=win?'Победа!':'Бой окончен';document.getElementById('gameOverStats').textContent=`Убийств: ${kills}`;document.getElementById('gameOverOverlay').classList.add('show')}
+function die(){if(gameMode==='team'||gameMode==='ffa'){endMatch(false);return}dead=true;stats.playTime+=sessionTime;stats.kills+=kills;if(kills>stats.bestKills)stats.bestKills=kills;saveStats();checkAchs();document.getElementById('endTitle').textContent='Ты погиб';document.getElementById('gameOverStats').textContent=`Уровень ${level} · ${kills} убийств`;document.getElementById('gameOverOverlay').classList.add('show')}
+
+function update(dt){
+  if(paused||dead)return;sessionTime+=dt;matchTime+=dt;
+  if(matchDuration>0&&matchTime>=matchDuration){endMatch(true);return}
+  if(waveState==='break'){breakLeft-=dt;const el=document.getElementById('breakTimer');el.textContent=`Перерыв ${Math.ceil(breakLeft)}с  ★ ${kills}`;el.classList.add('show');if(breakLeft<=0)endBreak()}
+  let dx=0,dy=0;
+  if(isDown('up'))dy--;if(isDown('down'))dy++;if(isDown('left'))dx--;if(isDown('right'))dx++;
+  if(player.sliding>0){player.sliding-=dt;const nx=player.x+player.slideDir.x*11*60*dt,ny=player.y+player.slideDir.y*11*60*dt;if(!hitObs(nx,player.y,player.r))player.x=nx;if(!hitObs(player.x,ny,player.r))player.y=ny}
+  else if(dx||dy){const l=Math.hypot(dx,dy);dx/=l;dy/=l;let spd=player.speed;const sprint=isDown('sprint')&&player.stamina>0;if(sprint){spd*=1.65;player.stamina=Math.max(0,player.stamina-28*dt);stats.sprintTime+=dt;sfxRun()}else player.stamina=Math.min(100,player.stamina+18*dt);const sp=activePerks.find(p=>p.type==='speed');if(sp)spd*=1+sp.value;const nx=player.x+dx*spd*60*dt,ny=player.y+dy*spd*60*dt;if(!hitObs(nx,player.y,player.r))player.x=nx;if(!hitObs(player.x,ny,player.r))player.y=ny}
+  else player.stamina=Math.min(100,player.stamina+22*dt);
+  player.x=clamp(player.x,player.r,W-player.r);player.y=clamp(player.y,player.r,H-player.r);
+  // aim with slight sensitivity feel (still absolute for topdown)
+  player.angle=ang(player,mouse);
+  if(player.invuln>0)player.invuln-=dt;slideCd=Math.max(0,slideCd-dt);grenadeCd=Math.max(0,grenadeCd-dt);helpCd=Math.max(0,helpCd-dt);
+  for(let i=activePerks.length-1;i>=0;i--){activePerks[i].timeLeft-=dt;if(activePerks[i].timeLeft<=0)activePerks.splice(i,1)}renderPerks();
+  shootCd=Math.max(0,shootCd-dt*1000);
+  if(reloadT>0){reloadT-=dt*1000;if(reloadT<=0){const w=WEAPONS[currentWeapon];const need=w.mag-player.mag[currentWeapon];const take=Math.min(need,player.reserve[currentWeapon]);player.mag[currentWeapon]+=take;player.reserve[currentWeapon]-=take;reloadT=0;updateHUD()}}
+  else if(mouse.down&&shootCd<=0&&player.mag[currentWeapon]>0&&player.sliding<=0)fire();
+  for(const b of bots)updateBotAI(b,dt);
+  for(let i=bullets.length-1;i>=0;i--){const b=bullets[i];b.x+=Math.cos(b.angle)*b.speed*60*dt;b.y+=Math.sin(b.angle)*b.speed*60*dt;b.life-=dt;if(b.life<=0||hitObs(b.x,b.y,2)||b.x<-30||b.x>W+30||b.y<-30||b.y>H+30){bullets.splice(i,1);continue}
+    if(b.owner!==player&&dist(b,player)<player.r+3&&player.invuln<=0){player.hp-=b.dmg;player.invuln=.4;bullets.splice(i,1);updateHUD();if(player.hp<=0){player.hp=0;die()}continue}
+    let hit=false;for(let j=bots.length-1;j>=0;j--){const bot=bots[j];if(b.owner===bot)continue;if(gameMode==='team'&&b.owner&&b.owner.team===bot.team)continue;if(dist(b,bot)<bot.r+3){bot.hp-=b.dmg;bullets.splice(i,1);hit=true;if(bot.hp<=0){if(b.owner===player){kills++;player.kills++}else if(b.owner)b.owner.kills++;bots.splice(j,1);if(gameMode==='team'||gameMode==='ffa'){const team=bot.team,name=bot.name;setTimeout(()=>{if(running)bots.push(createBot(team,name))},3000)}break}}}
+    if(hit)continue;
+    for(let j=zombies.length-1;j>=0;j--){const z=zombies[j];if(dist(b,z)<z.r+3){let dmg=b.dmg;const dp=activePerks.find(p=>p.type==='damage');if(dp&&b.owner===player)dmg*=1+dp.value;z.hp-=dmg;bullets.splice(i,1);if(z.hp<=0){if(b.owner===player){kills++;if(z.boss)stats.bossKills++}zombies.splice(j,1);updateHUD()}break}}}
+  for(let i=grenades.length-1;i>=0;i--){const g=grenades[i];g.x+=g.vx*60*dt;g.y+=g.vy*60*dt;g.vx*=.96;g.vy*=.96;g.life-=dt;if(g.life<=0){for(let j=zombies.length-1;j>=0;j--){const z=zombies[j],d=dist(g,z);if(d<90){z.hp-=60*(1-d/90);if(z.hp<=0){kills++;stats.grenadeKills++;zombies.splice(j,1)}}}for(let j=bots.length-1;j>=0;j--){const bot=bots[j],d=dist(g,bot);if(d<90&&(gameMode!=='team'||!g.owner||g.owner.team!==bot.team)){bot.hp-=50*(1-d/90);if(bot.hp<=0){if(g.owner===player)kills++;bots.splice(j,1)}}}grenades.splice(i,1);updateHUD()}}
+  for(let i=traps.length-1;i>=0;i--){const t=traps[i];t.life-=dt;if(t.life<=0){traps.splice(i,1);continue}for(let j=zombies.length-1;j>=0;j--){if(dist(t,zombies[j])<t.r+zombies[j].r){zombies[j].hp-=80;if(zombies[j].hp<=0){kills++;zombies.splice(j,1)}traps.splice(i,1);break}}}
+  for(let i=obstacles.length-1;i>=0;i--){if(obstacles[i].temp){obstacles[i].life-=dt;if(obstacles[i].life<=0)obstacles.splice(i,1)}}
+  for(let i=pickups.length-1;i>=0;i--){const p=pickups[i];p.life-=dt;p.bob+=dt*3;if(p.life<=0){pickups.splice(i,1);continue}if(dist(player,p)<player.r+12){applyPickup(p);pickups.splice(i,1)}}
+  for(let i=allies.length-1;i>=0;i--){const a=allies[i];a.life-=dt;if(a.life<=0){allies.splice(i,1);continue}let nearest=null,nd=999;for(const z of zombies){const d=dist(a,z);if(d<nd){nd=d;nearest=z}}if(nearest){const an=ang(a,nearest);a.x+=Math.cos(an)*a.speed*60*dt;a.y+=Math.sin(an)*a.speed*60*dt;a.shootCd-=dt;if(a.shootCd<=0&&nd<280){a.shootCd=.35;bullets.push({x:a.x,y:a.y,angle:an,speed:11,dmg:a.dmg,life:.9,color:'#5dade2',owner:player})}}}
+  for(const z of zombies){updateZombieAI(z,dt);if(Math.random()<0.001)sfxGrowl();if(dist(z,player)<z.r+player.r-2&&player.invuln<=0){player.hp-=z.dmg;player.invuln=.5;noDamageWave=false;updateHUD();if(player.hp<=0){player.hp=0;die()}}}
+  if((gameMode==='solo'||gameMode==='closed')&&waveState==='fighting'&&zombies.length===0&&pendingSpawns<=0&&!breakStarted)startBreak();
+  // NO random zombie spawn in team/ffa
+  updateHUD();
+}
+
+function drawGun(ctx,key){const w=WEAPONS[key];const len=w.len||28;ctx.fillStyle='#2a2a2a';ctx.fillRect(-6,-3,10,6);ctx.fillStyle='#333';ctx.fillRect(2,-3.5,len*.45,7);ctx.fillStyle='#222';ctx.fillRect(8,2,5,7);ctx.fillStyle='#555';ctx.fillRect(2+len*.4,-1.8,len*.55,3.6);ctx.fillStyle=w.color;ctx.fillRect(2+len*.9,-2.2,5,4.4);ctx.fillStyle='#111';ctx.fillRect(10,-5.5,3,3)}
+function draw(){
+  ctx.fillStyle='#0b0b0b';ctx.fillRect(0,0,W,H);
+  if(gfx()!=='potato'){ctx.strokeStyle='rgba(255,255,255,.02)';for(let x=0;x<W;x+=55){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=55){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}}
+  for(const o of obstacles){ctx.fillStyle=o.temp?'#444':'#191919';ctx.fillRect(o.x,o.y,o.w,o.h)}
+  for(const t of traps){ctx.beginPath();ctx.arc(t.x,t.y,t.r,0,6.28);ctx.fillStyle='rgba(180,40,30,.7)';ctx.fill()}
+  for(const p of pickups){ctx.save();ctx.translate(p.x,p.y+Math.sin(p.bob||0)*2);ctx.fillStyle=p.type==='ammo'?'#f1c40f':p.type==='health'?'#e74c3c':'#3498db';ctx.beginPath();ctx.arc(0,0,7,0,6.28);ctx.fill();ctx.restore()}
+  if(waveState==='break'){ctx.save();ctx.translate(shopPos.x,shopPos.y);ctx.beginPath();ctx.arc(0,0,22,0,6.28);ctx.fillStyle='rgba(241,196,15,.3)';ctx.fill();ctx.beginPath();ctx.arc(0,0,13,0,6.28);ctx.fillStyle='#f1c40f';ctx.fill();ctx.fillStyle='#111';ctx.font='bold 11px Oswald';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('SHOP',0,1);ctx.restore()}
+  for(const a of allies){ctx.beginPath();ctx.arc(a.x,a.y,a.r,0,6.28);ctx.fillStyle='#5dade2';ctx.fill()}
+  for(const b of bots){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);ctx.fillStyle=b.color;ctx.beginPath();ctx.arc(0,0,b.r,0,6.28);ctx.fill();ctx.fillStyle='#1a1a1a';ctx.fillRect(5,-2,14,4);ctx.restore();ctx.fillStyle='rgba(0,0,0,.5)';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText(b.name,b.x,b.y-b.r-5)}
+  for(const z of zombies){ctx.save();ctx.translate(z.x,z.y);ctx.fillStyle=z.color;ctx.beginPath();ctx.arc(0,0,z.r,0,6.28);ctx.fill();const ea=ang(z,player);ctx.fillStyle='#ff2222';ctx.beginPath();ctx.arc(Math.cos(ea)*z.r*.3-2.5,Math.sin(ea)*z.r*.3-1,2,0,6.28);ctx.arc(Math.cos(ea)*z.r*.3+2.5,Math.sin(ea)*z.r*.3-1,2,0,6.28);ctx.fill();if(z.boss||z.type==='tank'){const bw=z.r*2;ctx.fillStyle='#222';ctx.fillRect(-bw/2,-z.r-8,bw,3);ctx.fillStyle=z.boss?'#c41e1e':'#e67e22';ctx.fillRect(-bw/2,-z.r-8,bw*(z.hp/z.maxHp),3)}ctx.restore()}
+  for(const b of bullets){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);ctx.fillStyle=b.color;ctx.fillRect(-4,-1.2,8,2.4);ctx.restore()}
+  for(const g of grenades){ctx.fillStyle='#f1c40f';ctx.beginPath();ctx.arc(g.x,g.y,5,0,6.28);ctx.fill()}
+  ctx.save();ctx.translate(player.x,player.y);ctx.rotate(player.angle);
+  ctx.fillStyle=player.invuln>0?'rgba(255,90,90,.75)':(player.sliding>0?'#6eb0d8':'#3a8fd4');
+  ctx.beginPath();ctx.arc(0,0,player.r,0,6.28);ctx.fill();drawGun(ctx,currentWeapon);
+  ctx.fillStyle='#2a6aa8';ctx.beginPath();ctx.arc(1,0,6,0,6.28);ctx.fill();ctx.fillStyle='#111';ctx.fillRect(-1,-3.5,7,3.5);ctx.restore();
+  if(reloadT>0){const w=WEAPONS[currentWeapon];const pr=1-reloadT/w.reload;ctx.strokeStyle='#f1c40f';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(player.x,player.y,player.r+8,-Math.PI/2,-Math.PI/2+pr*6.28);ctx.stroke()}
+  mmCtx.fillStyle='rgba(0,0,0,.85)';mmCtx.fillRect(0,0,120,120);const sc=120/Math.max(W,H);
+  mmCtx.fillStyle='#333';for(const o of obstacles)mmCtx.fillRect(o.x*sc,o.y*sc,o.w*sc,o.h*sc);
+  mmCtx.fillStyle='#c41e1e';for(const z of zombies){mmCtx.beginPath();mmCtx.arc(z.x*sc,z.y*sc,z.boss?3:2,0,6.28);mmCtx.fill()}
+  for(const b of bots){mmCtx.fillStyle=b.color;mmCtx.beginPath();mmCtx.arc(b.x*sc,b.y*sc,2.2,0,6.28);mmCtx.fill()}
+  mmCtx.fillStyle='#4a9aea';mmCtx.beginPath();mmCtx.arc(player.x*sc,player.y*sc,3,0,6.28);mmCtx.fill();
+}
+function loop(now){if(!running)return;const dt=Math.min((now-lastT)/1000,.05);lastT=now;if(!paused&&!dead)update(dt);draw();requestAnimationFrame(loop)}
+</script>
+</body>
+</html>
