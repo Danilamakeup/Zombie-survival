@@ -700,14 +700,7 @@ function startGame(mode='solo',requestedRoom=null){
   document.getElementById('hudMidLabel').textContent=(mode==='solo')?'Зомби':'Боты';
 
   // NO ZOMBIES in team / ffa
-  if(mode==='team'){
-    for(let i=0;i<3;i++)bots.push(createBot(0,'Ally '+(i+1)));
-    for(let i=0;i<4;i++)bots.push(createBot(1,'Enemy '+(i+1)));
-    announce('КОМАНДНЫЙ БОЙ');
-  } else if(mode==='ffa'){
-    for(let i=0;i<6;i++)bots.push(createBot(2+i,'Bot '+(i+1)));
-    announce('FREE FOR ALL');
-  } else if(mode==='closed'){
+  if(mode==='closed'){ for(let i=0;i<7;i++) bots.push(createBot('bot_'+i)); } else if(mode==='closed'){
     // ЗАКРЫТЫЙ БОЙ = PvE/PvP-лобби с ИИ. НИКАКИХ ЗОМБИ.
     // Боты полностью локальные, но относятся именно к этому режиму.
     for(let i=0;i<7;i++)bots.push(createBot(2+i,'Enemy '+(i+1)));
@@ -850,5 +843,24 @@ function draw(){
 function loop(now){if(!running)return;const dt=Math.min((now-lastT)/1000,.05);lastT=now;if(!paused&&!dead)update(dt);draw();requestAnimationFrame(loop)}
 window.addEventListener('beforeunload',()=>{try{leaveOnlineRoom()}catch(e){}});
 </script>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+let socket = null;
+function connectMultiplayer(){
+  if(socket || !window.io) return;
+  socket = io({transports:['websocket','polling']});
+  socket.on('connect', ()=>{
+    const el=document.getElementById('serverStatus');
+    if(el) el.textContent='🟢 Сервер: онлайн';
+  });
+  socket.on('disconnect', ()=>{
+    const el=document.getElementById('serverStatus');
+    if(el) el.textContent='🔴 Сервер: оффлайн';
+  });
+}
+connectMultiplayer();
+</script>
+
 </body>
 </html>
