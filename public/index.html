@@ -205,6 +205,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 .game-btn.menu{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.2)}
 #menuRoot.hidden{display:none}
 </style>
+<script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
 <div id="menuRoot">
@@ -213,14 +214,14 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
     <div class="logo">TOPDOWN <span>ZOMBIE</span> SURVIVAL</div>
     <nav class="nav">
       <a class="active">Меню</a>
-      <div class="profile-btn" id="serverStatus" style="margin-right:8px;color:#e74c3c;border-color:rgba(231,76,60,.35)">● Сервер: офлайн</div><div class="profile-btn" id="profileBtn" onclick="openDetail('profile')">Профиль</div>
+      <div class="profile-btn" id="profileBtn" onclick="openDetail('profile')">Профиль</div>
     </nav>
   </header>
   <div class="main">
     <div class="left">
       <div class="game-title">TOPDOWN<br><span class="red">ZOMBIE</span><br>SURVIVAL</div>
       <div class="subtitle">Выживание · Мультиплеер</div>
-      <p class="desc">Зомби — только в одиночной. Team и FFA — онлайн. Закрытый бой — локально с ИИ.</p>
+      <p class="desc">Зомби — только в одиночной. Team и FFA — чистый бой с ботами.</p>
     </div>
     <div class="cards">
       <div class="card play" onclick="openDetail('play')" onmouseenter="sfxHover()">
@@ -229,7 +230,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
       </div>
       <div class="card multi" onclick="openDetail('multi')" onmouseenter="sfxHover()">
         <div class="card-bg"></div><div class="card-art multi-art"></div><div class="card-overlay"></div>
-        <div class="card-content"><div class="card-icon">⚔</div><div class="card-title">Мультиплеер</div><div class="card-tags"><span class="tag">Боты</span></div><p class="card-desc">Team / FFA — онлайн. Закрытый бой — ИИ.</p></div>
+        <div class="card-content"><div class="card-icon">⚔</div><div class="card-title">Мультиплеер</div><div class="card-tags"><span class="tag">Боты</span></div><p class="card-desc">Team / FFA / закрытый бой. Без зомби.</p></div>
       </div>
       <div class="card leaders" onclick="openDetail('leaders')" onmouseenter="sfxHover()">
         <div class="card-bg"></div><div class="card-art leaders-art"></div><div class="card-overlay"></div>
@@ -293,58 +294,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
   <div class="game-overlay gameover" id="gameOverOverlay"><h1 id="endTitle">Бой окончен</h1><p id="gameOverStats"></p><div><button class="game-btn resume" onclick="restartGame()">Заново</button><button class="game-btn menu" onclick="backToMenu()">В меню</button></div></div>
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
 <script>
-/* ===== NETWORK ===== */
-let socket=null, onlineRoom=null, onlinePlayers=new Map(), onlineBullets=[], onlineServers=[], networkReady=false, networkJoined=false, networkLastSend=0;
-const NET_W=1000, NET_H=640;
-function netScaleX(x){return x/NET_W*W}
-function netScaleY(y){return y/NET_H*H}
-function netWorldX(x){return x/W*NET_W}
-function netWorldY(y){return y/H*NET_H}
-function setServerStatus(online,text){const el=document.getElementById('serverStatus');if(!el)return;el.textContent=`● Сервер: ${text|| (online?'онлайн':'офлайн')}`;el.style.color=online?'#2ecc71':'#e74c3c';el.style.borderColor=online?'rgba(46,204,113,.35)':'rgba(231,76,60,.35)'}
-function initNetwork(){
-  if(typeof io!=='function'){setServerStatus(false,'Socket.IO не загружен');return}
-  socket=io({transports:['websocket','polling']});
-  socket.on('connect',()=>{networkReady=true;setServerStatus(true,'онлайн');socket.emit('getServers');});
-  socket.on('disconnect',()=>{networkReady=false;networkJoined=false;onlineRoom=null;onlinePlayers.clear();onlineBullets=[];setServerStatus(false,'офлайн');});
-  socket.on('connect_error',()=>setServerStatus(false,'ошибка подключения'));
-  socket.on('serverList',list=>{onlineServers=Array.isArray(list)?list:[];if(document.getElementById('detail')?.classList.contains('open')&&selectedMode)document.getElementById('detailBody').innerHTML=getMultiHTML()});
-  socket.on('joined',data=>{
-    onlineRoom=data.roomId;networkJoined=true;onlinePlayers.clear();onlineBullets=[];
-    for(const pl of (data.snapshot?.players||[]))onlinePlayers.set(pl.id,pl);
-    const me=onlinePlayers.get(data.playerId);
-    if(me&&player){player.x=netScaleX(me.x);player.y=netScaleY(me.y);player.hp=me.hp;player.kills=me.kills;player.team=me.team}
-    setServerStatus(true,`онлайн · ${data.roomId}`);
-  });
-  socket.on('roomState',snap=>{
-    if(!networkJoined)return;
-    onlinePlayers.clear();for(const pl of (snap.players||[]))onlinePlayers.set(pl.id,pl);
-    onlineBullets=snap.bullets||[];
-    const me=socket?.id&&onlinePlayers.get(socket.id);
-    if(me&&player){player.x=netScaleX(me.x);player.y=netScaleY(me.y);player.hp=me.hp;player.kills=me.kills;player.team=me.team;player.invuln=me.invuln>0?.2:0}
-    if(snap.matchTime!=null)matchTime=snap.matchTime;
-    updateHUD();
-  });
-  socket.on('matchEnd',data=>{if(gameMode==='team'||gameMode==='ffa'){kills=onlinePlayers.get(socket?.id)?.kills||kills;endMatch(true)}});
-  socket.on('errorMsg',msg=>{showToast(msg||'Ошибка сервера');if(gameMode==='team'||gameMode==='ffa')backToMenu()});
-}
-function joinOnlineRoom(mode,requestedRoom=null){
-  if(!socket||!networkReady){showToast('Сервер ещё не подключён');return false}
-  const list=onlineServers.filter(r=>r.mode===mode&&r.players<r.max);
-  const room=(requestedRoom&&list.find(r=>r.id===requestedRoom))||list[0];
-  if(!room){showToast('Нет свободных серверов');return false}
-  socket.emit('joinRoom',{roomId:room.id,name:currentUser?.name||'Player'});
-  return true;
-}
-function leaveOnlineRoom(){if(socket&&networkJoined)socket.emit('leaveRoom');networkJoined=false;onlineRoom=null;onlinePlayers.clear();onlineBullets=[]}
-function sendNetworkInput(){
-  if(!networkJoined||!socket||!player)return;
-  const b=settings.binds;
-  socket.emit('input',{up:!!keys[b.up],down:!!keys[b.down],left:!!keys[b.left],right:!!keys[b.right],sprint:!!keys[b.sprint],angle:player.angle,weapon:currentWeapon});
-}
-/* Network starts after auth/mode state is initialized. */
-
 /* ===== AUDIO ===== */
 let actx=null,masterG,musicG,sfxG,musicNodes=[],musicMode='none',lastGrowl=0,runT=0;
 function initAudio(){if(actx)return;try{actx=new(window.AudioContext||window.webkitAudioContext)();masterG=actx.createGain();masterG.gain.value=.7;masterG.connect(actx.destination);musicG=actx.createGain();musicG.gain.value=.25;musicG.connect(masterG);sfxG=actx.createGain();sfxG.gain.value=.5;sfxG.connect(masterG);applyVol()}catch(e){}}
@@ -425,14 +375,12 @@ let currentUser=loadUser();
 function updateProfileBtn(){const btn=document.getElementById('profileBtn');if(currentUser){btn.textContent=currentUser.name;btn.classList.add('logged')}else{btn.textContent='Профиль';btn.classList.remove('logged')}}
 updateProfileBtn();
 let authMode='login',selectedMode='team',topsTab='stats',listeningBind=null;
-initNetwork();
 
-const SERVERS={team:[],ffa:[],closed:[]};
-function serverCards(mode){
-  const list=onlineServers.filter(r=>r.mode===mode);
-  if(!list.length)return '<div style="font-size:12px;color:#888">Подключение к серверу…</div>';
-  return list.map(r=>`<div class="server-card" onclick="joinServer('${mode}','${r.id}')"><div><div class="sname">${r.name}</div><div class="smeta">${mode.toUpperCase()} · ${r.started?'В БОЮ':'Ожидание'}</div></div><div class="splayers">${r.players}/${r.max}</div></div>`).join('');
-}
+const SERVERS={
+  team:[{name:'Server-1',players:'3/8',ping:22},{name:'Server-2',players:'5/8',ping:35},{name:'Server-3',players:'1/8',ping:18},{name:'Server-4',players:'7/8',ping:41}],
+  ffa:[{name:'Server-1',players:'4/8',ping:29},{name:'Server-2',players:'6/8',ping:47},{name:'Server-3',players:'2/8',ping:15},{name:'Server-4',players:'8/8',ping:55},{name:'Server-5',players:'3/8',ping:33}],
+  closed:[{name:'Server-1',players:'1/4',ping:12},{name:'Server-2',players:'2/4',ping:20},{name:'Server-3',players:'1/4',ping:8}]
+};
 
 /* ===== MENU HTML ===== */
 function getMultiHTML(){
@@ -441,9 +389,9 @@ function getMultiHTML(){
     <div class="mode-pill ${selectedMode==='team'?'active':''}" onclick="selectMode('team')">Командный · 5 мин</div>
     <div class="mode-pill ${selectedMode==='ffa'?'active':''}" onclick="selectMode('ffa')">Каждый за себя · 10 мин</div>
     <div class="mode-pill ${selectedMode==='closed'?'active':''}" onclick="selectMode('closed')">Закрытый бой (ИИ)</div>
-  </div><p style="font-size:12px;color:#888">Team и FFA — только игроки/боты, без зомби.</p></div>
+  </div><p style="font-size:12px;color:#888">Team и FFA — только реальные игроки. Боты только в «Закрытом бою».</p></div>
   <div class="section"><h3>Серверы</h3><div class="server-list">
-    ${serverCards(selectedMode)}
+    ${(window.netRooms||[]).filter(s=>s.mode===selectedMode).map(s=>`<div class="server-card" onclick="joinServer('${selectedMode}','${s.id}')"><div><div class="sname">${s.name}</div><div class="smeta">${selectedMode.toUpperCase()} · online</div></div><div class="splayers">${s.players}/${s.max}</div></div>`).join('') || SERVERS[selectedMode].map(s=>`<div class="server-card" onclick="joinServer('${selectedMode}')"><div><div class="sname">${s.name}</div><div class="smeta">${selectedMode.toUpperCase()} · подключение...</div></div><div class="splayers">${s.players}</div></div>`).join('')}
   </div></div>`;
 }
 function selectMode(m){selectedMode=m;document.getElementById('detailBody').innerHTML=getMultiHTML();sfxClick()}
@@ -597,7 +545,7 @@ document.addEventListener('keydown',e=>{
 
 const content={
   play:{title:'Играть',html:`<div class="section"><h3>Одиночная игра</h3><p>Волны зомби. Без регистрации.</p></div><button class="btn-play" onclick="startGame('solo')">Начать игру</button>`},
-  howto:{title:'Как играть',html:`<div class="section"><h3>Режимы</h3><ul><li><b>Одиночная</b> — зомби, волны, боссы</li><li><b>Закрытый бой</b> — локальный бой с ИИ, без зомби</li><li><b>Командный / FFA</b> — настоящий онлайн через Socket.IO</li></ul></div>
+  howto:{title:'Как играть',html:`<div class="section"><h3>Режимы</h3><ul><li><b>Одиночная / Закрытый</b> — зомби, волны, боссы</li><li><b>Командный / FFA</b> — только боты, без зомби</li></ul></div>
     <div class="section"><h3>Управление</h3><p>Настраивается в «Настройки → Управление».</p>
     <ul><li>WASD — движение</li><li>Shift — бег</li><li>Ctrl — подкат</li><li>ЛКМ — огонь</li><li>R / G / E / F — перезарядка / граната / действие / подмога</li></ul></div>`}
 };
@@ -684,7 +632,58 @@ function spawnZombie(boss=false){let x,y,t=0;do{const s=Math.floor(Math.random()
 function updateZombieAI(z,dt){z.sepX=0;z.sepY=0;for(const o of zombies){if(o===z)continue;const d=dist(z,o);if(d<z.r+o.r+16&&d>0.1){const p=(1-d/(z.r+o.r+16))*2;z.sepX+=(z.x-o.x)/d*p;z.sepY+=(z.y-o.y)/d*p}}let ta=ang(z,player);if(z.type==='fast')ta+=z.strafeDir*.4;let vx=Math.cos(ta)*z.speed+z.sepX*.85,vy=Math.sin(ta)*z.speed+z.sepY*.85;let nx=z.x+vx*60*dt,ny=z.y+vy*60*dt;if(hitObs(nx,z.y,z.r)){const s=Math.random()>.5?1:-1;vx=Math.cos(ta+s)*z.speed;nx=z.x+vx*60*dt;if(hitObs(nx,z.y,z.r))nx=z.x}if(hitObs(z.x,ny,z.r)){const s=Math.random()>.5?1:-1;vy=Math.sin(ta+s)*z.speed;ny=z.y+vy*60*dt;if(hitObs(z.x,ny,z.r))ny=z.y}if(hitObs(nx,ny,z.r)){nx=z.x;ny=z.y}z.x=nx;z.y=ny}
 function updateBotAI(b,dt){let target=null,td=900;if(gameMode==='ffa'||(gameMode==='team'&&b.team!==0)){const d=dist(b,player);if(d<td){td=d;target=player}}for(const o of bots){if(o===b)continue;if(gameMode==='team'&&o.team===b.team)continue;const d=dist(b,o);if(d<td){td=d;target=o}}if(target){b.angle=ang(b,target);const d=dist(b,target);if(d>180){let nx=b.x+Math.cos(b.angle)*b.speed*60*dt,ny=b.y+Math.sin(b.angle)*b.speed*60*dt;if(!hitObs(nx,b.y,b.r))b.x=nx;if(!hitObs(b.x,ny,b.r))b.y=ny}else if(d<70){let nx=b.x-Math.cos(b.angle)*b.speed*.7*60*dt,ny=b.y-Math.sin(b.angle)*b.speed*.7*60*dt;if(!hitObs(nx,b.y,b.r))b.x=nx;if(!hitObs(b.x,ny,b.r))b.y=ny}else{const sa=b.angle+b.strafe*1.5;let nx=b.x+Math.cos(sa)*b.speed*.55*60*dt,ny=b.y+Math.sin(sa)*b.speed*.55*60*dt;if(!hitObs(nx,b.y,b.r))b.x=nx;if(!hitObs(b.x,ny,b.r))b.y=ny}b.shootCd-=dt;if(b.shootCd<=0&&d<320&&b.mag>0){b.shootCd=.2+Math.random()*.1;b.mag--;bullets.push({x:b.x+Math.cos(b.angle)*16,y:b.y+Math.sin(b.angle)*16,angle:b.angle+(Math.random()-.5)*.08,speed:12,dmg:12,life:.9,color:b.color,owner:b});if(b.mag<=0)b.reloadT=1.2}if(b.reloadT>0){b.reloadT-=dt;if(b.reloadT<=0)b.mag=30}}b.x=clamp(b.x,20,W-20);b.y=clamp(b.y,20,H-20)}
 
-function startGame(mode='solo',requestedRoom=null){
+
+// ===== ONLINE MULTIPLAYER =====
+let socket=null, netRooms=[], netPlayers=new Map(), netBullets=[], netRoomId=null, netPlayerId=null;
+let netInputTimer=0, netLastServerState=0, netConnected=false;
+function ensureSocket(){
+  if(socket) return socket;
+  if(!window.io) return null;
+  socket=io({transports:['websocket','polling']});
+  socket.on('connect',()=>{netConnected=true;const e=document.getElementById('serverStatus');if(e)e.textContent='🟢 Сервер: онлайн';socket.emit('getServers')});
+  socket.on('disconnect',()=>{netConnected=false;netPlayers.clear();netBullets=[];const e=document.getElementById('serverStatus');if(e)e.textContent='🔴 Сервер: оффлайн'});
+  socket.on('serverList',list=>{netRooms=list||[];if(document.getElementById('detailBody')&&!document.getElementById('gameScreen').classList.contains('active')) document.getElementById('detailBody').innerHTML=getMultiHTML()});
+  socket.on('joined',data=>{netRoomId=data.roomId;netPlayerId=data.playerId;applyNetSnapshot(data.snapshot,true)});
+  socket.on('roomState',snap=>applyNetSnapshot(snap,false));
+  socket.on('errorMsg',msg=>{showToast(msg||'Ошибка сервера');if(running&&(gameMode==='team'||gameMode==='ffa')) stopOnlineGame()});
+  socket.on('matchEnd',data=>{showToast('Матч окончен');if(running&&(gameMode==='team'||gameMode==='ffa')) endMatch(false)});
+  return socket;
+}
+function applyNetSnapshot(snap,hard){
+  if(!snap)return;
+  netLastServerState=performance.now();
+  netPlayers.clear();
+  for(const p of (snap.players||[])) netPlayers.set(p.id,p);
+  netBullets=snap.bullets||[];
+  const me=netPlayers.get(netPlayerId);
+  if(me){
+    player.hp=me.hp; player.maxHp=me.maxHp; player.team=me.team; player.angle=me.angle;
+    if(hard || !netInputTimer){player.x=me.x;player.y=me.y}
+  }
+  updateHUD();
+}
+function joinOnlineRoom(mode,roomId){
+  const s=ensureSocket();
+  if(!s){showToast('Socket.IO не загрузился');return false}
+  if(!netConnected){showToast('Сервер ещё подключается...');return false}
+  const id=roomId || (mode+'-1');
+  s.emit('joinRoom',{roomId:id,name:currentUser?.name||'Player'});
+  return true;
+}
+function stopOnlineGame(){
+  if(socket&&netRoomId)socket.emit('leaveRoom');
+  netRoomId=null;netPlayerId=null;netPlayers.clear();netBullets=[];
+  running=false;document.getElementById('gameScreen').classList.remove('active');document.getElementById('menuRoot').classList.remove('hidden');
+}
+function sendNetInput(dt){
+  if(!socket||!netConnected||!netRoomId)return;
+  netInputTimer-=dt;
+  if(netInputTimer>0)return;
+  netInputTimer=.05;
+  socket.emit('input',{up:isDown('up'),down:isDown('down'),left:isDown('left'),right:isDown('right'),sprint:isDown('sprint'),angle:player.angle,weapon:currentWeapon});
+}
+
+function startGame(mode='solo',roomId=null){
   resumeAudio();sfxStart();stopMusic();closeDetail();
   document.getElementById('menuRoot').classList.add('hidden');document.getElementById('gameScreen').classList.add('active');
   gameMode=mode;running=true;paused=false;dead=false;level=1;kills=0;currentWeapon='rifle';activePerks=[];
@@ -693,14 +692,17 @@ function startGame(mode='solo',requestedRoom=null){
   shootCd=0;reloadT=0;grenadeCd=0;slideCd=0;helpCd=0;sessionTime=0;matchTime=0;shopOpen=false;
   matchDuration=mode==='team'?300:mode==='ffa'?600:0;
   player=createPlayer();zombies=[];bots=[];bullets=[];pickups=[];particles=[];grenades=[];traps=[];allies=[];obstacles=createObstacles();shopOffers=[];
-  if(mode==='team'||mode==='ffa'){ if(!joinOnlineRoom(mode,requestedRoom)){ running=false; document.getElementById('gameScreen').classList.remove('active'); document.getElementById('menuRoot').classList.remove('hidden'); return; } } else { leaveOnlineRoom(); }
   document.getElementById('pauseOverlay').classList.remove('show');document.getElementById('gameOverOverlay').classList.remove('show');
   document.getElementById('shopHint').classList.remove('show');document.getElementById('breakTimer').classList.remove('show');document.getElementById('skipBreakBtn').classList.remove('show');document.getElementById('shopPanel').classList.remove('show');
   document.getElementById('scoreboard').style.display=(mode==='team'||mode==='ffa')?'block':'none';
   document.getElementById('hudMidLabel').textContent=(mode==='solo')?'Зомби':'Боты';
 
-  // NO ZOMBIES in team / ffa
-  if(mode==='closed'){ for(let i=0;i<7;i++) bots.push(createBot('bot_'+i)); } else if(mode==='closed'){
+  // Team/FFA = REAL ONLINE PLAYERS ONLY. Closed = local AI only.
+  if(mode==='team'||mode==='ffa'){
+    announce(mode==='team'?'КОМАНДНЫЙ БОЙ · ONLINE':'FREE FOR ALL · ONLINE');
+    ensureSocket();
+    setTimeout(()=>joinOnlineRoom(mode,roomId),0);
+  } else if(mode==='closed'){
     // ЗАКРЫТЫЙ БОЙ = PvE/PvP-лобби с ИИ. НИКАКИХ ЗОМБИ.
     // Боты полностью локальные, но относятся именно к этому режиму.
     for(let i=0;i<7;i++)bots.push(createBot(2+i,'Enemy '+(i+1)));
@@ -733,8 +735,7 @@ function updateHUD(){
   document.getElementById('hudHealth').textContent=Math.max(0,Math.ceil(player.hp));
   document.getElementById('healthFill').style.width=(player.hp/player.maxHp*100)+'%';
   document.getElementById('staminaFill').style.width=player.stamina+'%';
-  if(gameMode==='team'||gameMode==='ffa'||gameMode==='closed')document.getElementById('hudWave').textContent=bots.length;
-  else document.getElementById('hudWave').textContent=waveState==='break'?'—':(zombies.length+Math.max(0,pendingSpawns));
+  if(gameMode==='team'||gameMode==='ffa')document.getElementById('hudWave').textContent=Math.max(0,netPlayers.size-1);else if(gameMode==='closed')document.getElementById('hudWave').textContent=bots.length;else document.getElementById('hudWave').textContent=waveState==='break'?'—':(zombies.length+Math.max(0,pendingSpawns));
   document.getElementById('hudKills').textContent=kills;
   const mn={solo:'SOLO',team:'TEAM',ffa:'FFA',closed:'CLOSED'};
   document.getElementById('hudMode').textContent=mn[gameMode]||'SOLO';
@@ -747,13 +748,7 @@ function updateHUD(){
   document.getElementById('grenadeInfo').textContent='G × '+player.grenades;
   const boss=zombies.find(z=>z.boss);const wrap=document.getElementById('bossBarWrap');
   if(boss){wrap.classList.add('show');document.getElementById('bossBarFill').style.width=(boss.hp/boss.maxHp*100)+'%'}else wrap.classList.remove('show');
-  if(gameMode==='team'||gameMode==='ffa'){
-    let rows='';
-    if(networkJoined&&onlinePlayers.size){
-      [...onlinePlayers.values()].sort((a,b)=>b.kills-a.kills).forEach(p=>{rows+=`<div class="srow"><span style="color:${p.color}">${p.id===socket?.id?'Ты':p.name}</span><span>${p.kills}</span></div>`});
-    } else { rows=`<div class="srow"><span>Подключение…</span><span>0</span></div>`; }
-    document.getElementById('scoreRows').innerHTML=rows;
-  }
+  if(gameMode==='team'||gameMode==='ffa'){let rows='';for(const p of netPlayers.values()){rows+=`<div class="srow"><span style="color:${p.color||'#fff'}">${p.name}${p.id===netPlayerId?' (ты)':''}</span><span>${p.kills||0}</span></div>`}document.getElementById('scoreRows').innerHTML=rows||'<div class="srow"><span>Подключение...</span></div>'}
 }
 function switchW(w){if(reloadT>0||!player.owned.includes(w))return;currentWeapon=w;updateHUD()}
 function startReload(){const w=WEAPONS[currentWeapon];if(reloadT>0||player.mag[currentWeapon]>=w.mag||player.reserve[currentWeapon]<=0)return;reloadT=w.reload;sfxReload()}
@@ -764,10 +759,10 @@ function renderPerks(){const ic={speed:'⚡',damage:'💥',regen:'❤️'};docum
 function throwGrenade(){if(player.grenades<=0||grenadeCd>0)return;player.grenades--;grenadeCd=.7;updateHUD();sfxGrenade();const a=player.angle;grenades.push({x:player.x+Math.cos(a)*20,y:player.y+Math.sin(a)*20,vx:Math.cos(a)*8.5,vy:Math.sin(a)*8.5,life:.8,owner:player})}
 function trySlide(){if(slideCd>0||player.sliding>0||player.stamina<25)return;let dx=0,dy=0;if(isDown('up'))dy--;if(isDown('down'))dy++;if(isDown('left'))dx--;if(isDown('right'))dx++;if(!dx&&!dy){dx=Math.cos(player.angle);dy=Math.sin(player.angle)}else{const l=Math.hypot(dx,dy);dx/=l;dy/=l}player.sliding=.28;player.slideDir={x:dx,y:dy};player.stamina-=25;player.invuln=.3;slideCd=.9}
 function callHelp(){if(player.helps<=0||helpCd>0)return;player.helps--;helpCd=8;for(let i=0;i<2;i++)allies.push({x:player.x+rand(-40,40),y:player.y+rand(-40,40),r:11,hp:60,speed:2.8,dmg:14,life:16,shootCd:0});updateHUD()}
-function fire(){const w=WEAPONS[currentWeapon];if(player.mag[currentWeapon]<=0){startReload();return}player.mag[currentWeapon]--;shootCd=w.rate;updateHUD();sfxShoot();if((gameMode==='team'||gameMode==='ffa')&&networkJoined){socket.emit('shoot',{angle:player.angle,weapon:currentWeapon});return}const n=w.pellets||1;for(let i=0;i<n;i++){const a=player.angle+rand(-w.spread,w.spread);bullets.push({x:player.x+Math.cos(player.angle)*16,y:player.y+Math.sin(player.angle)*16,angle:a,speed:13,dmg:w.dmg,life:1,color:w.color,owner:player})}}
+function fire(){const w=WEAPONS[currentWeapon];if(player.mag[currentWeapon]<=0){startReload();return}player.mag[currentWeapon]--;shootCd=w.rate;updateHUD();sfxShoot();const n=w.pellets||1;if((gameMode==='team'||gameMode==='ffa')&&socket&&netConnected){for(let i=0;i<n;i++){const a=player.angle+rand(-w.spread,w.spread);socket.emit('shoot',{angle:a,weapon:currentWeapon,dmg:w.dmg,speed:13,color:w.color})}return}for(let i=0;i<n;i++){const a=player.angle+rand(-w.spread,w.spread);bullets.push({x:player.x+Math.cos(player.angle)*16,y:player.y+Math.sin(player.angle)*16,angle:a,speed:13,dmg:w.dmg,life:1,color:w.color,owner:player})}}
 function togglePause(){if(dead||!running)return;paused=!paused;document.getElementById('pauseOverlay').classList.toggle('show',paused);if(!paused){lastT=performance.now();requestAnimationFrame(loop)}}
 function restartGame(){document.getElementById('gameOverOverlay').classList.remove('show');startGame(gameMode)}
-function backToMenu(){leaveOnlineRoom();stats.playTime+=sessionTime;stats.kills+=kills;if(kills>stats.bestKills)stats.bestKills=kills;saveStats();checkAchs();running=false;document.getElementById('gameScreen').classList.remove('active');document.getElementById('menuRoot').classList.remove('hidden');document.getElementById('pauseOverlay').classList.remove('show');document.getElementById('gameOverOverlay').classList.remove('show');startMusic('menu')}
+function backToMenu(){stats.playTime+=sessionTime;stats.kills+=kills;if(kills>stats.bestKills)stats.bestKills=kills;saveStats();checkAchs();running=false;document.getElementById('gameScreen').classList.remove('active');document.getElementById('menuRoot').classList.remove('hidden');document.getElementById('pauseOverlay').classList.remove('show');document.getElementById('gameOverOverlay').classList.remove('show');startMusic('menu')}
 function endMatch(win){dead=true;stats.playTime+=sessionTime;if(gameMode==='team'||gameMode==='ffa')stats.playerKills=(stats.playerKills||0)+kills;else stats.kills+=kills;saveStats();checkAchs();document.getElementById('endTitle').textContent=win?'Победа!':'Бой окончен';document.getElementById('gameOverStats').textContent=`Убийств: ${kills}`;document.getElementById('gameOverOverlay').classList.add('show')}
 function die(){if(gameMode==='team'||gameMode==='ffa'){endMatch(false);return}dead=true;stats.playTime+=sessionTime;stats.kills+=kills;if(kills>stats.bestKills)stats.bestKills=kills;saveStats();checkAchs();document.getElementById('endTitle').textContent='Ты погиб';document.getElementById('gameOverStats').textContent=`Уровень ${level} · ${kills} убийств`;document.getElementById('gameOverOverlay').classList.add('show')}
 
@@ -777,15 +772,15 @@ function update(dt){
   if(waveState==='break'){breakLeft-=dt;const el=document.getElementById('breakTimer');el.textContent=`Перерыв ${Math.ceil(breakLeft)}с  ★ ${kills}`;el.classList.add('show');if(breakLeft<=0)endBreak()}
   let dx=0,dy=0;
   if(isDown('up'))dy--;if(isDown('down'))dy++;if(isDown('left'))dx--;if(isDown('right'))dx++;
-  const onlineMode=(gameMode==='team'||gameMode==='ffa')&&networkJoined;
-  if(!onlineMode){
-    if(player.sliding>0){player.sliding-=dt;const nx=player.x+player.slideDir.x*11*60*dt,ny=player.y+player.slideDir.y*11*60*dt;if(!hitObs(nx,player.y,player.r))player.x=nx;if(!hitObs(player.x,ny,player.r))player.y=ny}
-    else if(dx||dy){const l=Math.hypot(dx,dy);dx/=l;dy/=l;let spd=player.speed;const sprint=isDown('sprint')&&player.stamina>0;if(sprint){spd*=1.65;player.stamina=Math.max(0,player.stamina-28*dt);stats.sprintTime+=dt;sfxRun()}else player.stamina=Math.min(100,player.stamina+18*dt);const sp=activePerks.find(p=>p.type==='speed');if(sp)spd*=1+sp.value;const nx=player.x+dx*spd*60*dt,ny=player.y+dy*spd*60*dt;if(!hitObs(nx,player.y,player.r))player.x=nx;if(!hitObs(player.x,ny,player.r))player.y=ny}
-    else player.stamina=Math.min(100,player.stamina+22*dt);
-    player.x=clamp(player.x,player.r,W-player.r);player.y=clamp(player.y,player.r,H-player.r);
-  } else {
-    const sprint=isDown('sprint'); player.stamina=sprint?Math.max(0,player.stamina-28*dt):Math.min(100,player.stamina+22*dt);
-    networkLastSend-=dt; if(networkLastSend<=0){networkLastSend=.05;sendNetworkInput();}
+  if(player.sliding>0){player.sliding-=dt;const nx=player.x+player.slideDir.x*11*60*dt,ny=player.y+player.slideDir.y*11*60*dt;if(!hitObs(nx,player.y,player.r))player.x=nx;if(!hitObs(player.x,ny,player.r))player.y=ny}
+  else if(dx||dy){const l=Math.hypot(dx,dy);dx/=l;dy/=l;let spd=player.speed;const sprint=isDown('sprint')&&player.stamina>0;if(sprint){spd*=1.65;player.stamina=Math.max(0,player.stamina-28*dt);stats.sprintTime+=dt;sfxRun()}else player.stamina=Math.min(100,player.stamina+18*dt);const sp=activePerks.find(p=>p.type==='speed');if(sp)spd*=1+sp.value;const nx=player.x+dx*spd*60*dt,ny=player.y+dy*spd*60*dt;if(!hitObs(nx,player.y,player.r))player.x=nx;if(!hitObs(player.x,ny,player.r))player.y=ny}
+  else player.stamina=Math.min(100,player.stamina+22*dt);
+  player.x=clamp(player.x,player.r,W-player.r);player.y=clamp(player.y,player.r,H-player.r);
+  if(gameMode==='team'||gameMode==='ffa'){
+    sendNetInput(dt);
+    // Online movement and damage are server-authoritative, but local movement is predicted for smooth input.
+    updateHUD();
+    return;
   }
   // aim with slight sensitivity feel (still absolute for topdown)
   player.angle=ang(player,mouse);
@@ -820,13 +815,14 @@ function draw(){
   for(const p of pickups){ctx.save();ctx.translate(p.x,p.y+Math.sin(p.bob||0)*2);ctx.fillStyle=p.type==='ammo'?'#f1c40f':p.type==='health'?'#e74c3c':'#3498db';ctx.beginPath();ctx.arc(0,0,7,0,6.28);ctx.fill();ctx.restore()}
   if(waveState==='break'){ctx.save();ctx.translate(shopPos.x,shopPos.y);ctx.beginPath();ctx.arc(0,0,22,0,6.28);ctx.fillStyle='rgba(241,196,15,.3)';ctx.fill();ctx.beginPath();ctx.arc(0,0,13,0,6.28);ctx.fillStyle='#f1c40f';ctx.fill();ctx.fillStyle='#111';ctx.font='bold 11px Oswald';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('SHOP',0,1);ctx.restore()}
   for(const a of allies){ctx.beginPath();ctx.arc(a.x,a.y,a.r,0,6.28);ctx.fillStyle='#5dade2';ctx.fill()}
-  for(const b of bots){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);ctx.fillStyle=b.color;ctx.beginPath();ctx.arc(0,0,b.r,0,6.28);ctx.fill();ctx.fillStyle='#1a1a1a';ctx.fillRect(5,-2,14,4);ctx.restore();ctx.fillStyle='rgba(0,0,0,.5)';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText(b.name,b.x,b.y-b.r-5)}
-  for(const z of zombies){ctx.save();ctx.translate(z.x,z.y);ctx.fillStyle=z.color;ctx.beginPath();ctx.arc(0,0,z.r,0,6.28);ctx.fill();const ea=ang(z,player);ctx.fillStyle='#ff2222';ctx.beginPath();ctx.arc(Math.cos(ea)*z.r*.3-2.5,Math.sin(ea)*z.r*.3-1,2,0,6.28);ctx.arc(Math.cos(ea)*z.r*.3+2.5,Math.sin(ea)*z.r*.3-1,2,0,6.28);ctx.fill();if(z.boss||z.type==='tank'){const bw=z.r*2;ctx.fillStyle='#222';ctx.fillRect(-bw/2,-z.r-8,bw,3);ctx.fillStyle=z.boss?'#c41e1e':'#e67e22';ctx.fillRect(-bw/2,-z.r-8,bw*(z.hp/z.maxHp),3)}ctx.restore()}
-  for(const b of bullets){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);ctx.fillStyle=b.color;ctx.fillRect(-4,-1.2,8,2.4);ctx.restore()}
-  if((gameMode==='team'||gameMode==='ffa')&&networkJoined){
-    for(const b of onlineBullets){ctx.save();ctx.translate(netScaleX(b.x),netScaleY(b.y));ctx.rotate(b.angle);ctx.fillStyle=b.color||'#fff';ctx.fillRect(-4,-1.2,8,2.4);ctx.restore()}
-    for(const p of onlinePlayers.values()){if(p.id===socket?.id)continue;const x=netScaleX(p.x),y=netScaleY(p.y);ctx.save();ctx.translate(x,y);ctx.rotate(p.angle||0);ctx.fillStyle=p.color||'#9b59b6';ctx.beginPath();ctx.arc(0,0,14,0,6.28);ctx.fill();ctx.fillStyle='#111';ctx.fillRect(5,-2,14,4);ctx.restore();ctx.fillStyle='rgba(0,0,0,.65)';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText(`${p.name} · ${p.hp}`,x,y-20)}
+  if(gameMode==='team'||gameMode==='ffa'){
+    for(const p of netPlayers.values()){if(p.id===netPlayerId)continue;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.angle||0);ctx.fillStyle=p.color||'#e74c3c';ctx.beginPath();ctx.arc(0,0,14,0,6.28);ctx.fill();ctx.fillStyle='#1a1a1a';ctx.fillRect(5,-2,14,4);ctx.restore();ctx.fillStyle='rgba(0,0,0,.65)';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText(p.name,p.x,p.y-20);ctx.fillStyle='#222';ctx.fillRect(p.x-16,p.y-16,32,3);ctx.fillStyle='#2ecc71';ctx.fillRect(p.x-16,p.y-16,32*Math.max(0,p.hp)/Math.max(1,p.maxHp),3)}
+  } else {
+    for(const b of bots){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);ctx.fillStyle=b.color;ctx.beginPath();ctx.arc(0,0,b.r,0,6.28);ctx.fill();ctx.fillStyle='#1a1a1a';ctx.fillRect(5,-2,14,4);ctx.restore();ctx.fillStyle='rgba(0,0,0,.5)';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText(b.name,b.x,b.y-b.r-5)}
   }
+  for(const z of zombies){ctx.save();ctx.translate(z.x,z.y);ctx.fillStyle=z.color;ctx.beginPath();ctx.arc(0,0,z.r,0,6.28);ctx.fill();const ea=ang(z,player);ctx.fillStyle='#ff2222';ctx.beginPath();ctx.arc(Math.cos(ea)*z.r*.3-2.5,Math.sin(ea)*z.r*.3-1,2,0,6.28);ctx.arc(Math.cos(ea)*z.r*.3+2.5,Math.sin(ea)*z.r*.3-1,2,0,6.28);ctx.fill();if(z.boss||z.type==='tank'){const bw=z.r*2;ctx.fillStyle='#222';ctx.fillRect(-bw/2,-z.r-8,bw,3);ctx.fillStyle=z.boss?'#c41e1e':'#e67e22';ctx.fillRect(-bw/2,-z.r-8,bw*(z.hp/z.maxHp),3)}ctx.restore()}
+  const drawBullets=(gameMode==='team'||gameMode==='ffa')?netBullets:bullets;
+  for(const b of drawBullets){ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.angle);ctx.fillStyle=b.color||'#fff';ctx.fillRect(-4,-1.2,8,2.4);ctx.restore()}
   for(const g of grenades){ctx.fillStyle='#f1c40f';ctx.beginPath();ctx.arc(g.x,g.y,5,0,6.28);ctx.fill()}
   ctx.save();ctx.translate(player.x,player.y);ctx.rotate(player.angle);
   ctx.fillStyle=player.invuln>0?'rgba(255,90,90,.75)':(player.sliding>0?'#6eb0d8':'#3a8fd4');
@@ -836,31 +832,10 @@ function draw(){
   mmCtx.fillStyle='rgba(0,0,0,.85)';mmCtx.fillRect(0,0,120,120);const sc=120/Math.max(W,H);
   mmCtx.fillStyle='#333';for(const o of obstacles)mmCtx.fillRect(o.x*sc,o.y*sc,o.w*sc,o.h*sc);
   mmCtx.fillStyle='#c41e1e';for(const z of zombies){mmCtx.beginPath();mmCtx.arc(z.x*sc,z.y*sc,z.boss?3:2,0,6.28);mmCtx.fill()}
-  for(const b of bots){mmCtx.fillStyle=b.color;mmCtx.beginPath();mmCtx.arc(b.x*sc,b.y*sc,2.2,0,6.28);mmCtx.fill()}
-  if((gameMode==='team'||gameMode==='ffa')&&networkJoined){for(const p of onlinePlayers.values()){if(p.id===socket?.id)continue;mmCtx.fillStyle=p.color||'#9b59b6';mmCtx.beginPath();mmCtx.arc(p.x*sc,p.y*sc,2.2,0,6.28);mmCtx.fill()}}
+  if(gameMode==='team'||gameMode==='ffa'){for(const p of netPlayers.values()){if(p.id===netPlayerId)continue;mmCtx.fillStyle=p.color||'#e74c3c';mmCtx.beginPath();mmCtx.arc(p.x*sc,p.y*sc,2.2,0,6.28);mmCtx.fill()}}else for(const b of bots){mmCtx.fillStyle=b.color;mmCtx.beginPath();mmCtx.arc(b.x*sc,b.y*sc,2.2,0,6.28);mmCtx.fill()}
   mmCtx.fillStyle='#4a9aea';mmCtx.beginPath();mmCtx.arc(player.x*sc,player.y*sc,3,0,6.28);mmCtx.fill();
 }
 function loop(now){if(!running)return;const dt=Math.min((now-lastT)/1000,.05);lastT=now;if(!paused&&!dead)update(dt);draw();requestAnimationFrame(loop)}
-window.addEventListener('beforeunload',()=>{try{leaveOnlineRoom()}catch(e){}});
 </script>
-
-<script src="/socket.io/socket.io.js"></script>
-<script>
-let socket = null;
-function connectMultiplayer(){
-  if(socket || !window.io) return;
-  socket = io({transports:['websocket','polling']});
-  socket.on('connect', ()=>{
-    const el=document.getElementById('serverStatus');
-    if(el) el.textContent='🟢 Сервер: онлайн';
-  });
-  socket.on('disconnect', ()=>{
-    const el=document.getElementById('serverStatus');
-    if(el) el.textContent='🔴 Сервер: оффлайн';
-  });
-}
-connectMultiplayer();
-</script>
-
 </body>
 </html>
